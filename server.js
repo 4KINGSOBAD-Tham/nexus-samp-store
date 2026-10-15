@@ -5,10 +5,27 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const fs = require('fs');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const { db, initDatabase } = require('./database');
 const { generatePromptPayQR, generateBankQR } = require('./promptpay');
 const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+// Strict Image File Filter
+const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const imageFileFilter = (req, file, cb) => {
+  if (allowedImageTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('ประเภทไฟล์ไม่ถูกต้อง! อนุญาตเฉพาะรูปภาพ (JPG, PNG, WEBP, GIF) เท่านั้น'));
+  }
+};
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: imageFileFilter
+});
 
 // Directory for product image attachments
 const uploadsDir = path.join(__dirname, 'public', 'uploads');
@@ -19,11 +36,16 @@ if (!fs.existsSync(uploadsDir)) {
 const prodStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.jpg';
-    cb(null, 'cover-' + Date.now() + '-' + Math.round(Math.random() * 1e6) + ext);
+    const ext = path.extname(file.originalname).toLowerCase();
+    const safeExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) ? ext : '.jpg';
+    cb(null, 'cover-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + safeExt);
   }
 });
-const uploadProductCover = multer({ storage: prodStorage, limits: { fileSize: 15 * 1024 * 1024 } });
+const uploadProductCover = multer({
+  storage: prodStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: imageFileFilter
+});
 
 // Initialize database
 initDatabase();
@@ -32,10 +54,165 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'samp-rank1-secret-key-2026';
 
-// Middleware
+// ----------------------------------------------------
+// 🛡️ NEXUS FULL-SPECTRUM SECURITY ENGINE (ระดับเต็มกราฟ)
+// ----------------------------------------------------
+
+// 1. Remove identifying server headers
+app.disable('x-powered-by');
+
+// 2. HTTP Security Headers (Helmet)
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
+
+// 3. Security Threat Logging Helper
+function logSecurityThreat(ip, method, endpoint, threatType, details, action = 'BLOCKED') {
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO security_logs (ip, method, endpoint, threat_type, details, action_taken)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(ip || 'unknown', method || 'GET', endpoint || '/', threatType, String(details).substring(0, 500), action);
+  } catch (err) {
+    console.error('Failed to log security incident:', err.message);
+  }
+}
+
+// 4. Rate Limiting: General API & Anti-DDoS
+const generalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 150,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+    logSecurityThreat(ip, req.method, req.originalUrl, 'RATE_LIMIT_EXCEEDED', '150 req/min limit reached');
+    res.status(429).json({
+      success: false,
+      message: 'คำขอถี่เกินไป เพื่อความปลอดภัย กรุณารอสักครู่ (Nexus Rate Limit Triggered)'
+    });
+  }
+});
+
+// 5. Rate Limiting: Brute Force Login & Register Protection
+const authLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+    logSecurityThreat(ip, req.method, req.originalUrl, 'AUTH_BRUTE_FORCE', 'Multiple failed login/register attempts');
+    res.status(429).json({
+      success: false,
+      message: 'มีการพยายามเข้าสู่ระบบบ่อยเกินไป กรุณารอ 5 นาทีเพื่อความปลอดภัยของบัญชี'
+    });
+  }
+});
+
+// 6. Rate Limiting: Slip Verification Anti-Flood
+const slipLimiter = rateLimit({
+  windowMs: 2 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+    logSecurityThreat(ip, req.method, req.originalUrl, 'SLIP_SPAM_FLOOD', 'Excessive slip verification requests');
+    res.status(429).json({
+      success: false,
+      message: 'ส่งตรวจสอบสลิปถี่เกินไป กรุณารอ 2 นาทีก่อนทำรายการใหม่'
+    });
+  }
+});
+
+// 7. Nexus Shield Web Application Firewall (WAF)
+function nexusShieldWAF(req, res, next) {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+  const ua = req.headers['user-agent'] || '';
+  const url = req.originalUrl || req.url;
+
+  // Scanner Bot Blocker
+  const botScannerRegex = /(sqlmap|nikto|dirbuster|gobuster|wpscan|masscan|zgrab|acunetix|nessus|nmap|havij|arachni|openvas|hydra|medusa|shodan|censys)/i;
+  if (botScannerRegex.test(ua)) {
+    logSecurityThreat(ip, req.method, url, 'VULNERABILITY_SCANNER', `User-Agent: ${ua}`);
+    return res.status(403).json({
+      success: false,
+      message: '⛔ ACCESS DENIED: Scanner bot blocked by Nexus Shield WAF'
+    });
+  }
+
+  // Common Exploit Probe Paths Blocker
+  const probePaths = [
+    /\.env/i, /\.git/i, /\.svn/i, /\.aws/i, /\.docker/i,
+    /wp-admin/i, /wp-login/i, /xmlrpc\.php/i,
+    /phpmyadmin/i, /pma/i, /shell\.php/i, /eval-stdin\.php/i,
+    /\.ds_store/i, /actuator/i, /config\.json/i, /web\.config/i
+  ];
+  for (const pattern of probePaths) {
+    if (pattern.test(url)) {
+      logSecurityThreat(ip, req.method, url, 'PROBE_EXPLOIT_PATH', `Probe target: ${url}`);
+      return res.status(403).json({
+        success: false,
+        message: '⛔ ACCESS DENIED: Probe detected and blocked by Nexus Shield WAF'
+      });
+    }
+  }
+
+  // Path Traversal Blocker
+  const pathTraversalRegex = /(\.\.\/|\.\.\\|\.\.%2f|\.\.%5c|win\.ini|\/etc\/passwd|\/etc\/shadow)/i;
+  if (pathTraversalRegex.test(url)) {
+    logSecurityThreat(ip, req.method, url, 'PATH_TRAVERSAL', `Target URL: ${url}`);
+    return res.status(400).json({
+      success: false,
+      message: '⛔ ACCESS DENIED: Path traversal attempt detected'
+    });
+  }
+
+  // SQL Injection in Query Strings
+  const sqlInjectionPattern = /(\b(UNION(\s+ALL)?\s+SELECT|SELECT\s+.*\s+FROM|INSERT\s+INTO|DROP\s+TABLE|ALTER\s+TABLE|DELETE\s+FROM)\b|--|\/\*|\*\/)/i;
+  const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
+  if (queryString && sqlInjectionPattern.test(decodeURIComponent(queryString))) {
+    logSecurityThreat(ip, req.method, url, 'SQL_INJECTION_QUERY', `Query: ${queryString}`);
+    return res.status(400).json({
+      success: false,
+      message: '⛔ ACCESS DENIED: SQL injection pattern detected'
+    });
+  }
+
+  // Payload XSS Stripping
+  if (req.body && typeof req.body === 'object') {
+    sanitizePayload(req.body);
+  }
+
+  next();
+}
+
+function sanitizePayload(obj) {
+  for (const key in obj) {
+    if (typeof obj[key] === 'string') {
+      obj[key] = obj[key]
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        .replace(/javascript:/gi, '')
+        .replace(/onload\s*=/gi, '')
+        .replace(/onerror\s*=/gi, '');
+    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+      sanitizePayload(obj[key]);
+    }
+  }
+}
+
+// Concurrency slip lock set
+const activeSlipLocks = new Set();
+
+// Global Middleware Chain
+app.use(nexusShieldWAF);
+app.use('/api/', generalLimiter);
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Auth Helper Middleware
@@ -233,7 +410,7 @@ app.get('/api/fixes', (req, res) => {
 // ----------------------------------------------------
 
 // Register
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', authLimiter, (req, res) => {
   try {
     const { username, email, password } = req.body;
 
@@ -284,7 +461,7 @@ app.post('/api/auth/register', (req, res) => {
 });
 
 // Login
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', authLimiter, (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -392,7 +569,14 @@ app.post('/api/topup/promptpay-qr', authenticateToken, (req, res, next) => {
 });
 
 // Automated Slip Verification (SlipOK API)
-app.post('/api/topup/verify-slip', authenticateToken, upload.single('slip'), async (req, res) => {
+app.post('/api/topup/verify-slip', authenticateToken, slipLimiter, upload.single('slip'), async (req, res) => {
+  const userLock = `user_${req.user.id}`;
+  if (activeSlipLocks.has(userLock)) {
+    return res.status(429).json({ success: false, message: 'ระบบกำลังดำเนินการตรวจสอบสลิปก่อนหน้านี้ของคุณอยู่ กรุณารอสักครู่' });
+  }
+  activeSlipLocks.add(userLock);
+
+  let transRefLock = null;
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'กรุณาแนบไฟล์รูปภาพสลิปโอนเงิน' });
@@ -450,6 +634,12 @@ app.post('/api/topup/verify-slip', authenticateToken, upload.single('slip'), asy
 
     // Check duplicate transRef
     const transRef = (slipData.data && slipData.data.transRef) || ('SLIP-' + Date.now());
+    transRefLock = `trans_${transRef}`;
+    if (activeSlipLocks.has(transRefLock)) {
+      return res.status(400).json({ success: false, message: 'สลิปนี้กำลังอยู่ในกระบวนการบันทึกยอดเงิน กรุณาอย่าส่งซ้ำ' });
+    }
+    activeSlipLocks.add(transRefLock);
+
     const existing = db.prepare('SELECT id FROM topups WHERE ref_code = ?').get(transRef);
     if (existing) {
       return res.status(400).json({ success: false, message: 'สลิปนี้ถูกใช้งานไปแล้ว ไม่สามารถนำมาใช้ซ้ำได้!' });
@@ -498,6 +688,9 @@ app.post('/api/topup/verify-slip', authenticateToken, upload.single('slip'), asy
   } catch (err) {
     console.error('Slip verification error:', err);
     res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการตรวจสอบสลิป: ' + err.message });
+  } finally {
+    activeSlipLocks.delete(userLock);
+    if (transRefLock) activeSlipLocks.delete(transRefLock);
   }
 });
 
@@ -950,6 +1143,51 @@ app.post('/api/admin/settings', authenticateToken, requireAdmin, (req, res) => {
 
     updateAll();
     res.json({ success: true, message: 'บันทึกการตั้งค่าร้านค้าเรียบร้อยแล้ว!' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ----------------------------------------------------
+// 🛡️ Admin Security Center APIs (Live Monitoring & Logs)
+// ----------------------------------------------------
+app.get('/api/admin/security/stats', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const totalBlocked = db.prepare('SELECT COUNT(*) as count FROM security_logs').get().count;
+    const scannerCount = db.prepare("SELECT COUNT(*) as count FROM security_logs WHERE threat_type = 'VULNERABILITY_SCANNER'").get().count;
+    const probeCount = db.prepare("SELECT COUNT(*) as count FROM security_logs WHERE threat_type = 'PROBE_EXPLOIT_PATH'").get().count;
+    const rateLimitCount = db.prepare("SELECT COUNT(*) as count FROM security_logs WHERE threat_type = 'RATE_LIMIT_EXCEEDED' OR threat_type = 'AUTH_BRUTE_FORCE' OR threat_type = 'SLIP_SPAM_FLOOD'").get().count;
+
+    const recentLogs = db.prepare('SELECT * FROM security_logs ORDER BY id DESC LIMIT 25').all();
+
+    res.json({
+      success: true,
+      stats: {
+        totalBlocked,
+        scannerCount,
+        probeCount,
+        rateLimitCount,
+        firewallStatus: 'ACTIVE_FULL_SHIELD',
+        modules: [
+          { name: 'Nexus Shield WAF (Firewall)', status: 'ACTIVE', desc: 'ตรวจจับและบล็อก Bot, Scanner, SQLi, LFI อัตโนมัติ' },
+          { name: 'Anti-DDoS & Rate Limiter', status: 'ACTIVE', desc: 'จำกัดปริมาณคำขอ 150 ครั้ง/นาที ต่อ 1 IP' },
+          { name: 'Brute-Force Protection', status: 'ACTIVE', desc: 'จำกัดการสุ่มรหัสผ่านล็อกอินสูงสุด 10 ครั้ง/5 นาที' },
+          { name: 'Slip Double-Spend Anti-Race Lock', status: 'ACTIVE', desc: 'บล็อกการส่งสลิปซ้ำซ้อนหรือยิงสลิปพร้อมกัน' },
+          { name: 'Helmet HTTP Security Headers', status: 'ACTIVE', desc: 'ป้องกัน Clickjacking, MIME-Sniffing, XSS' },
+          { name: 'Anti-Inspect / Anti-Devtools', status: 'ACTIVE', desc: 'บล็อก F12, คลิกขวา, View Source ป้องกันการขโมยโค้ด' }
+        ],
+        recentLogs
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/security/clear-logs', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    db.prepare('DELETE FROM security_logs').run();
+    res.json({ success: true, message: 'ล้างประวัติการสกัดกั้นเรียบร้อยแล้ว' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

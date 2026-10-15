@@ -75,6 +75,7 @@ function switchView(viewName) {
     loadTopupHistory();
   } else if (viewName === 'admin') {
     loadAdminProducts();
+    loadSecurityDashboard();
   }
 }
 
@@ -1041,6 +1042,84 @@ async function loadSlipokSettings() {
     if (keyInput && res.settings.slipok_api_key) {
       keyInput.value = res.settings.slipok_api_key;
     }
+  }
+}
+
+// ----------------------------------------------------
+// 🛡️ Admin Security Dashboard Handlers (Nexus Shield)
+// ----------------------------------------------------
+async function loadSecurityDashboard() {
+  if (!state.user || state.user.role !== 'admin') return;
+
+  const res = await api('/api/admin/security/stats');
+  if (!res.success || !res.stats) return;
+
+  const { totalBlocked, scannerCount, probeCount, rateLimitCount, modules, recentLogs } = res.stats;
+
+  // Stats Counters
+  const elTotal = document.getElementById('secTotalBlocked');
+  const elScanners = document.getElementById('secScannersBlocked');
+  const elProbes = document.getElementById('secProbesBlocked');
+  const elRate = document.getElementById('secRateLimits');
+
+  if (elTotal) elTotal.textContent = Number(totalBlocked || 0).toLocaleString();
+  if (elScanners) elScanners.textContent = Number(scannerCount || 0).toLocaleString();
+  if (elProbes) elProbes.textContent = Number(probeCount || 0).toLocaleString();
+  if (elRate) elRate.textContent = Number(rateLimitCount || 0).toLocaleString();
+
+  // Active Modules
+  const modulesContainer = document.getElementById('secModulesList');
+  if (modulesContainer && modules) {
+    modulesContainer.innerHTML = modules.map(m => `
+      <div style="background: var(--bg-input); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: var(--radius-sm); padding: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <div style="font-weight: 700; color: #fff; font-size: 0.84rem;">${m.name}</div>
+          <div style="font-size: 0.72rem; color: var(--text-dim); margin-top: 2px;">${m.desc}</div>
+        </div>
+        <span style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3);">
+          ${m.status}
+        </span>
+      </div>
+    `).join('');
+  }
+
+  // Incident Logs Table
+  const tbody = document.getElementById('secLogsTbody');
+  if (tbody) {
+    if (!recentLogs || recentLogs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">ยังไม่มีรายงานภัยคุกคาม ระบบปลอดภัย 100% (Nexus Shield เฝ้าระวังอยู่)</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = recentLogs.map(l => `
+      <tr>
+        <td style="color: var(--text-dim); font-size: 0.78rem; font-family: var(--font-mono);">${l.created_at || 'Recently'}</td>
+        <td><code style="color: var(--accent-cyan); font-size: 0.8rem; background: rgba(6, 182, 212, 0.1); padding: 2px 6px; border-radius: 4px;">${escapeHtml(l.ip)}</code></td>
+        <td>
+          <span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); font-size: 0.74rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.3);">
+            ${escapeHtml(l.threat_type)}
+          </span>
+        </td>
+        <td style="color: var(--text-muted); font-size: 0.8rem; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(l.details)}">
+          ${escapeHtml(l.endpoint)} ${l.details ? `— ${escapeHtml(l.details)}` : ''}
+        </td>
+        <td style="text-align: right;">
+          <span style="color: var(--accent-emerald); font-weight: 700; font-size: 0.78rem;">🛡️ ${l.action_taken || 'BLOCKED'}</span>
+        </td>
+      </tr>
+    `).join('');
+  }
+}
+
+async function clearSecurityLogs() {
+  if (!confirm('คุณต้องการล้างประวัติการสกัดกั้นการโจมตีทั้งหมดหรือไม่?')) return;
+
+  const res = await api('/api/admin/security/clear-logs', { method: 'POST' });
+  if (res.success) {
+    showToast('ล้างประวัติการสกัดกั้นเรียบร้อยแล้ว');
+    loadSecurityDashboard();
+  } else {
+    showToast(res.message, 'error');
   }
 }
 

@@ -305,6 +305,81 @@
             <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">บันทึกการตั้งค่า SlipOK</button>
           </form>
         </div>
+
+        <!-- 🛡️ Nexus Shield Live Security Monitoring Panel (ระดับเต็มกราฟ) -->
+        <div style="background: var(--bg-surface); border: 1px solid rgba(6, 182, 212, 0.35); border-radius: var(--radius-md); padding: 1.5rem; margin-top: 2rem; position: relative; overflow: hidden;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <span style="font-size: 1.4rem;">🛡️</span>
+                <h3 style="color: #fff; font-size: 1.15rem; margin: 0;">ศูนย์เฝ้าระวังความปลอดภัยระบบ (Nexus Shield WAF)</h3>
+                <span style="background: rgba(16, 185, 129, 0.2); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 999px;">
+                  🟢 ทำงานระดับเต็มกราฟ (ACTIVE)
+                </span>
+              </div>
+              <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.35rem; margin-bottom: 0;">
+                ระบบตรวจจับการโจมตี DDoS, Scanner Bots, SQLi, LFI, ป้องกันโกงสลิปซ้ำ และบล็อกการขโมยโค้ดแบบเรียลไทม์
+              </p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadSecurityDashboard()" style="font-size: 0.8rem;">
+              🔄 รีเฟรชสถานะความปลอดภัย
+            </button>
+          </div>
+
+          <!-- Security Stat Badges Grid -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; margin-bottom: 1.5rem;">
+            <div style="background: var(--bg-input); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 0.85rem;">
+              <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">การโจมตีที่บล็อกทั้งหมด</div>
+              <div style="font-size: 1.6rem; font-weight: 900; font-family: var(--font-mono); color: var(--accent-rose); margin-top: 0.25rem;" id="secTotalBlocked">0</div>
+            </div>
+            <div style="background: var(--bg-input); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 0.85rem;">
+              <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">บล็อก Scanner & Bots</div>
+              <div style="font-size: 1.6rem; font-weight: 900; font-family: var(--font-mono); color: var(--accent-cyan); margin-top: 0.25rem;" id="secScannersBlocked">0</div>
+            </div>
+            <div style="background: var(--bg-input); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 0.85rem;">
+              <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">บล็อกเจาะระบบ (Probes/LFI)</div>
+              <div style="font-size: 1.6rem; font-weight: 900; font-family: var(--font-mono); color: var(--accent-amber); margin-top: 0.25rem;" id="secProbesBlocked">0</div>
+            </div>
+            <div style="background: var(--bg-input); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 0.85rem;">
+              <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">บล็อก Rate Limit & Flood</div>
+              <div style="font-size: 1.6rem; font-weight: 900; font-family: var(--font-mono); color: var(--accent-emerald); margin-top: 0.25rem;" id="secRateLimits">0</div>
+            </div>
+          </div>
+
+          <!-- Active Security Shields List -->
+          <div style="margin-bottom: 1.5rem;">
+            <h4 style="color: #fff; font-size: 0.92rem; margin-bottom: 0.75rem;">🛡️ โมดูลความปลอดภัยที่กำลังคุ้มครองเซิร์ฟเวอร์:</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.65rem;" id="secModulesList">
+              <!-- Rendered by app.js -->
+            </div>
+          </div>
+
+          <!-- Live Security Incidents Table -->
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <h4 style="color: #fff; font-size: 0.92rem; margin: 0;">📋 บันทึกการสกัดกั้นการโจมตีล่าสุด (Incident Logs):</h4>
+              <button class="btn btn-sm" onclick="clearSecurityLogs()" style="background: rgba(244, 63, 94, 0.1); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.25); font-size: 0.76rem; padding: 0.2rem 0.6rem;">
+                🗑️ ล้างประวัติ
+              </button>
+            </div>
+            <div style="overflow-x: auto; max-height: 260px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+              <table class="admin-table" style="font-size: 0.82rem; margin: 0;">
+                <thead>
+                  <tr>
+                    <th style="width: 140px;">เวลา</th>
+                    <th style="width: 120px;">IP ผู้โจมตี</th>
+                    <th style="width: 180px;">ประเภทภัยคุกคาม</th>
+                    <th>รายละเอียด / ปลายทาง</th>
+                    <th style="text-align: right; width: 100px;">การจัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="secLogsTbody">
+                  <tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">ยังไม่มีรายงานภัยคุกคาม ระบบปลอดภัย 100%</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -466,7 +541,8 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=2.6"></script>
+  <script src="/js/security.js?v=1.0"></script>
+  <script src="/js/app.js?v=2.7"></script>
 </body>
 
 </html>

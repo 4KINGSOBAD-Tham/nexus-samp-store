@@ -93,6 +93,17 @@ function initDatabase() {
       key TEXT PRIMARY KEY,
       value TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS security_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ip TEXT,
+      method TEXT,
+      endpoint TEXT,
+      threat_type TEXT,
+      details TEXT,
+      action_taken TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   // Seed default settings

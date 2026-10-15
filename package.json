@@ -7,7 +7,14 @@
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
-  "keywords": ["samp", "gta", "shop", "script", "gamemode", "pawn"],
+  "keywords": [
+    "samp",
+    "gta",
+    "shop",
+    "script",
+    "gamemode",
+    "pawn"
+  ],
   "author": "Rank1SAMP",
   "license": "ISC",
   "dependencies": {
@@ -15,6 +22,8 @@
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
     "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.4.0",
     "qrcode": "^1.5.4"

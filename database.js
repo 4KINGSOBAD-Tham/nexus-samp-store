@@ -1,16 +1,93 @@
+require('dotenv').config();
 const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 
-const dbPath = path.join(__dirname, 'store.db');
-const db = new Database(dbPath);
+const DATABASE_URL = process.env.DATABASE_URL;
+const isPostgres = !!DATABASE_URL;
 
-// Enable foreign keys
-db.pragma('foreign_keys = ON');
+let sqliteDb = null;
+let pgPool = null;
 
-function initDatabase() {
-  // Create tables
-  db.exec(`
+if (isPostgres) {
+  console.log('🌐 Database: Connected to Supabase Cloud PostgreSQL!');
+  pgPool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+  });
+} else {
+  console.log('📁 Database: Running with local SQLite (store.db)');
+  const dbPath = path.join(__dirname, 'store.db');
+  sqliteDb = new Database(dbPath);
+  sqliteDb.pragma('foreign_keys = ON');
+}
+
+function toPgSql(sql) {
+  let converted = sql;
+  if (/INSERT\s+OR\s+REPLACE\s+INTO\s+site_settings/i.test(converted)) {
+    converted = 'INSERT INTO site_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value';
+  }
+  let i = 1;
+  converted = converted.replace(/\?/g, () => '$' + (i++));
+  if (/^\s*INSERT\s+INTO\b/i.test(converted) && !converted.includes('RETURNING') && !converted.includes('ON CONFLICT')) {
+    converted += ' RETURNING id';
+  }
+  return converted;
+}
+
+const db = {
+  isPostgres,
+  async all(sql, params = []) {
+    if (isPostgres) {
+      const res = await pgPool.query(toPgSql(sql), params);
+      return res.rows;
+    } else {
+      return sqliteDb.prepare(sql).all(...params);
+    }
+  },
+  async get(sql, params = []) {
+    if (isPostgres) {
+      const res = await pgPool.query(toPgSql(sql), params);
+      return res.rows[0];
+    } else {
+      return sqliteDb.prepare(sql).get(...params);
+    }
+  },
+  async run(sql, params = []) {
+    if (isPostgres) {
+      const res = await pgPool.query(toPgSql(sql), params);
+      return { lastInsertRowid: res.rows[0]?.id || 0, changes: res.rowCount };
+    } else {
+      return sqliteDb.prepare(sql).run(...params);
+    }
+  },
+  prepare(sql) {
+    if (sqliteDb) return sqliteDb.prepare(sql);
+    return {
+      all: (...params) => db.all(sql, params),
+      get: (...params) => db.get(sql, params),
+      run: (...params) => db.run(sql, params)
+    };
+  },
+  exec(sql) {
+    if (isPostgres) {
+      return pgPool.query(sql);
+    } else {
+      return sqliteDb.exec(sql);
+    }
+  }
+};
+
+async function initDatabase() {
+  if (isPostgres) {
+    // Already migrated via init_supabase.js
+    console.log('✅ Supabase Cloud Database is active and verified.');
+    return;
+  }
+
+  // SQLite Local Tables Initialization
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
@@ -106,21 +183,24 @@ function initDatabase() {
     );
   `);
 
-  // Seed default settings
-  const checkSetting = db.prepare('SELECT value FROM site_settings WHERE key = ?');
-  const insertSetting = db.prepare('INSERT OR REPLACE INTO site_settings (key, value) VALUES (?, ?)');
+  // Seed default settings for SQLite
+  const checkSetting = sqliteDb.prepare('SELECT value FROM site_settings WHERE key = ?');
+  const insertSetting = sqliteDb.prepare('INSERT OR REPLACE INTO site_settings (key, value) VALUES (?, ?)');
 
   const defaultSettings = {
     store_name: 'Nexus SAMP Store',
     store_tagline: 'ศูนย์รวมสคริปต์และระบบ GTA SA-MP คุณภาพสูง จัดส่งอัตโนมัติ 24 ชม.',
     promptpay_number: '0816302510',
     promptpay_name: 'NEXUS SAMP STORE',
+    bank_name: 'ธนาคารไทยพาณิชย์ (SCB)',
+    bank_account: '5632881610',
+    bank_account_name: 'ธาม สุวรรณรัตน์',
     discord_link: 'https://discord.gg/samp-thailand',
     facebook_link: 'https://facebook.com/nexussamp',
     youtube_link: 'https://youtube.com/@nexussamp',
     announcement: '🔥 ยินดีต้อนรับสู่ Nexus SAMP Store! เติมเงินครบ 500 บาท รับโบนัส 10% ฟรีทันที',
-    slipok_branch_id: '',
-    slipok_api_key: ''
+    slipok_branch_id: '78673',
+    slipok_api_key: 'SLIPOKK5AUD56'
   };
 
   for (const [key, val] of Object.entries(defaultSettings)) {
@@ -128,42 +208,10 @@ function initDatabase() {
       insertSetting.run(key, val);
     }
   }
-
-  // Seed users if empty
-  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-  if (userCount === 0) {
-    const adminPass = bcrypt.hashSync('admin1234', 10);
-    const playerPass = bcrypt.hashSync('123456', 10);
-
-    const insertUser = db.prepare(`
-      INSERT INTO users (username, email, password_hash, role, balance, avatar)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-    insertUser.run('admin', 'admin@rank1samp.com', adminPass, 'admin', 5000.00, '👑');
-    insertUser.run('player1', 'player1@gmail.com', playerPass, 'user', 500.00, '🎮');
-  }
-
-  // Seed categories
-  const catCount = db.prepare('SELECT COUNT(*) as count FROM categories').get().count;
-  if (catCount === 0) {
-    const insertCat = db.prepare(`
-      INSERT INTO categories (name, slug, icon, description)
-      VALUES (?, ?, ?, ?)
-    `);
-
-    insertCat.run('โหมดเกมเต็มระบบ (Gamemodes)', 'gamemode', '🎮', 'โหมดเกม Roleplay, Gangwar, TDM พร้อมเปิดเซิร์ฟเวอร์ได้ทันที');
-    insertCat.run('กระเป๋า & UI Textdraw', 'inventory-ui', '🎒', 'ระบบกระเป๋าช่องตาราง, หลอดเลือด, ไมล์รถ, เมนู UI สวยล้ำสมัย');
-    insertCat.run('ระบบแก๊งค์ & ยึดจุด (Turf)', 'turf-gang', '⚔️', 'ระบบชิงพื้นที่แก๊งค์, พ่นสเปรย์, ยึดธง, สถิติ Killfeed เฉพาะ');
-    insertCat.run('ระบบกันแฮก & Launcher', 'anticheat-launcher', '🛡️', 'ตัวป้องกัน S0beit, Cleo Hack, แบน HWID และตัวเปิดเกมอัตโนมัติ');
-    insertCat.run('ระบบงาน & เศรษฐกิจ (Jobs)', 'jobs-system', '💼', 'งานขุดแร่, ตัดไม้, ขนส่ง, แท็กซี่, ระบบตลาดกลาง');
-    insertCat.run('ระบบบ้าน & ธุรกิจ (Housing)', 'housing-biz', '🏠', 'ระบบสร้างบ้าน, ตกแต่งภายใน, ธุรกิจปั๊มน้ำมัน และร้านค้า');
-  }
-
-  // Products table is kept clean for real products added by admin
 }
 
 module.exports = {
   db,
-  initDatabase
+  initDatabase,
+  isPostgres
 };

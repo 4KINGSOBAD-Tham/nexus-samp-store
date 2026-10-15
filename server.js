@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -68,13 +69,12 @@ app.use(helmet({
 }));
 
 // 3. Security Threat Logging Helper
-function logSecurityThreat(ip, method, endpoint, threatType, details, action = 'BLOCKED') {
+async function logSecurityThreat(ip, method, endpoint, threatType, details, action = 'BLOCKED') {
   try {
-    const stmt = db.prepare(`
+    await db.run(`
       INSERT INTO security_logs (ip, method, endpoint, threat_type, details, action_taken)
       VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(ip || 'unknown', method || 'GET', endpoint || '/', threatType, String(details).substring(0, 500), action);
+    `, [ip || 'unknown', method || 'GET', endpoint || '/', threatType, String(details).substring(0, 500), action]);
   } catch (err) {
     console.error('Failed to log security incident:', err.message);
   }
@@ -224,17 +224,21 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ success: false, message: 'กรุณาเข้าสู่ระบบก่อนใช้งาน' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) {
       return res.status(403).json({ success: false, message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
     }
-    // Fetch fresh user data from DB
-    const freshUser = db.prepare('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?').get(user.id);
-    if (!freshUser) {
-      return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลผู้ใช้งาน' });
+    try {
+      // Fetch fresh user data from DB
+      const freshUser = await db.get('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?', [user.id]);
+      if (!freshUser) {
+        return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลผู้ใช้งาน' });
+      }
+      req.user = freshUser;
+      next();
+    } catch (e) {
+      return res.status(500).json({ success: false, message: e.message });
     }
-    req.user = freshUser;
-    next();
   });
 }
 
@@ -251,11 +255,11 @@ function requireAdmin(req, res, next) {
 // ----------------------------------------------------
 
 // Site Settings
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT key, value FROM site_settings').all();
+    const rows = await db.all('SELECT key, value FROM site_settings');
     const settings = {};
-    rows.forEach(r => { settings[r.key] = r.value; });
+    (rows || []).forEach(r => { settings[r.key] = r.value; });
     res.json({ success: true, settings });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -263,17 +267,22 @@ app.get('/api/settings', (req, res) => {
 });
 
 // Live Stats
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', async (req, res) => {
   try {
-    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-    const prodCount = db.prepare('SELECT COUNT(*) as count FROM products').get().count;
-    const orderCount = db.prepare('SELECT COUNT(*) as count FROM orders').get().count;
-    const totalSales = db.prepare('SELECT COALESCE(SUM(price), 0) as total FROM orders').get().total;
+    const userRow = await db.get('SELECT COUNT(*) as count FROM users');
+    const prodRow = await db.get('SELECT COUNT(*) as count FROM products');
+    const orderRow = await db.get('SELECT COUNT(*) as count FROM orders');
+    const salesRow = await db.get('SELECT COALESCE(SUM(price), 0) as total FROM orders');
+
+    const userCount = Number(userRow?.count || 0);
+    const prodCount = Number(prodRow?.count || 0);
+    const orderCount = Number(orderRow?.count || 0);
+    const totalSales = Number(salesRow?.total || 0);
 
     res.json({
       success: true,
       stats: {
-        users: userCount + 1400, // combined with historical baseline
+        users: userCount + 1400,
         products: prodCount,
         orders: orderCount + 2850,
         totalSales: totalSales + 45000,
@@ -286,14 +295,13 @@ app.get('/api/stats', (req, res) => {
 });
 
 // Categories
-app.get('/api/categories', (req, res) => {
+app.get('/api/categories', async (req, res) => {
   try {
-    const categories = db.prepare('SELECT * FROM categories ORDER BY id ASC').all();
-    // Add product counts for each category
-    const countStmt = db.prepare('SELECT COUNT(*) as count FROM products WHERE category_slug = ?');
-    categories.forEach(cat => {
-      cat.product_count = countStmt.get(cat.slug).count;
-    });
+    const categories = await db.all('SELECT * FROM categories ORDER BY id ASC');
+    for (const cat of categories) {
+      const c = await db.get('SELECT COUNT(*) as count FROM products WHERE category_slug = ?', [cat.slug]);
+      cat.product_count = Number(c?.count || 0);
+    }
     res.json({ success: true, categories });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -301,7 +309,7 @@ app.get('/api/categories', (req, res) => {
 });
 
 // Products List
-app.get('/api/products', (req, res) => {
+app.get('/api/products', async (req, res) => {
   try {
     const { category, search, sort, featured } = req.query;
     let query = 'SELECT * FROM products WHERE 1=1';
@@ -332,10 +340,10 @@ app.get('/api/products', (req, res) => {
       query += ' ORDER BY id DESC';
     }
 
-    const products = db.prepare(query).all(...params);
+    const products = await db.all(query, params);
 
     // Parse JSON fields
-    products.forEach(p => {
+    (products || []).forEach(p => {
       try { p.features = JSON.parse(p.features || '[]'); } catch (e) { p.features = []; }
       try { p.requirements = JSON.parse(p.requirements || '[]'); } catch (e) { p.requirements = []; }
     });
@@ -347,14 +355,14 @@ app.get('/api/products', (req, res) => {
 });
 
 // Single Product Detail
-app.get('/api/products/:id', (req, res) => {
+app.get('/api/products/:id', async (req, res) => {
   try {
     const id = req.params.id;
     let product;
     if (isNaN(id)) {
-      product = db.prepare('SELECT * FROM products WHERE slug = ?').get(id);
+      product = await db.get('SELECT * FROM products WHERE slug = ?', [id]);
     } else {
-      product = db.prepare('SELECT * FROM products WHERE id = ?').get(Number(id));
+      product = await db.get('SELECT * FROM products WHERE id = ?', [Number(id)]);
     }
 
     if (!product) {
@@ -410,7 +418,7 @@ app.get('/api/fixes', (req, res) => {
 // ----------------------------------------------------
 
 // Register
-app.post('/api/auth/register', authLimiter, (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
@@ -427,16 +435,16 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
     }
 
     // Check existing
-    const existing = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email);
+    const existing = await db.get('SELECT id FROM users WHERE username = ? OR email = ?', [username, email]);
     if (existing) {
       return res.status(400).json({ success: false, message: 'ชื่อผู้ใช้หรืออีเมลนี้มีอยู่ในระบบแล้ว' });
     }
 
     const passwordHash = bcrypt.hashSync(password, 10);
-    const result = db.prepare(`
+    const result = await db.run(`
       INSERT INTO users (username, email, password_hash, role, balance, avatar)
       VALUES (?, ?, ?, 'user', 0.00, '👤')
-    `).run(username, email, passwordHash);
+    `, [username, email, passwordHash]);
 
     const user = {
       id: result.lastInsertRowid,
@@ -461,7 +469,7 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
 });
 
 // Login
-app.post('/api/auth/login', authLimiter, (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -469,7 +477,7 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
       return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE username = ? OR email = ?').get(username, username);
+    const user = await db.get('SELECT * FROM users WHERE username = ? OR email = ?', [username, username]);
     if (!user) {
       return res.status(400).json({ success: false, message: 'ไม่พบชื่อผู้ใช้หรืออีเมลนี้ในระบบ' });
     }
@@ -484,7 +492,7 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
       username: user.username,
       email: user.email,
       role: user.role,
-      balance: user.balance,
+      balance: Number(user.balance || 0),
       avatar: user.avatar
     };
 
@@ -521,9 +529,9 @@ app.post('/api/topup/bank-qr', authenticateToken, async (req, res) => {
     }
 
     // Get SCB Bank settings
-    const bankNameSetting = db.prepare('SELECT value FROM site_settings WHERE key = ?').get('bank_name');
-    const bankAccountSetting = db.prepare('SELECT value FROM site_settings WHERE key = ?').get('bank_account');
-    const bankAccountNameSetting = db.prepare('SELECT value FROM site_settings WHERE key = ?').get('bank_account_name');
+    const bankNameSetting = await db.get('SELECT value FROM site_settings WHERE key = ?', ['bank_name']);
+    const bankAccountSetting = await db.get('SELECT value FROM site_settings WHERE key = ?', ['bank_account']);
+    const bankAccountNameSetting = await db.get('SELECT value FROM site_settings WHERE key = ?', ['bank_account_name']);
 
     const bankName = (bankNameSetting && bankNameSetting.value) || 'ธนาคารไทยพาณิชย์ (SCB)';
     const bankAccount = (bankAccountSetting && bankAccountSetting.value) || '5632881610';
@@ -537,7 +545,7 @@ app.post('/api/topup/bank-qr', authenticateToken, async (req, res) => {
       bonus = Math.round(numAmount * 0.10);
     }
 
-    const promptpayNumberSetting = db.prepare('SELECT value FROM site_settings WHERE key = ?').get('promptpay_number');
+    const promptpayNumberSetting = await db.get('SELECT value FROM site_settings WHERE key = ?', ['promptpay_number']);
     const target = (promptpayNumberSetting && promptpayNumberSetting.value) || '0816302510';
 
     // Generate SCB Bank QR (accepted by all Thai mobile banking apps)
@@ -586,8 +594,8 @@ app.post('/api/topup/verify-slip', authenticateToken, slipLimiter, upload.single
     const expectedAmount = Number(amount) || 0;
 
     // Get SlipOK configuration from database settings
-    const branchSetting = db.prepare('SELECT value FROM site_settings WHERE key = ?').get('slipok_branch_id');
-    const keySetting = db.prepare('SELECT value FROM site_settings WHERE key = ?').get('slipok_api_key');
+    const branchSetting = await db.get('SELECT value FROM site_settings WHERE key = ?', ['slipok_branch_id']);
+    const keySetting = await db.get('SELECT value FROM site_settings WHERE key = ?', ['slipok_api_key']);
     let rawBranchId = (branchSetting && branchSetting.value) ? branchSetting.value.trim() : '';
     const apiKey = (keySetting && keySetting.value) ? keySetting.value.trim() : '';
 
@@ -640,7 +648,7 @@ app.post('/api/topup/verify-slip', authenticateToken, slipLimiter, upload.single
     }
     activeSlipLocks.add(transRefLock);
 
-    const existing = db.prepare('SELECT id FROM topups WHERE ref_code = ?').get(transRef);
+    const existing = await db.get('SELECT id FROM topups WHERE ref_code = ?', [transRef]);
     if (existing) {
       return res.status(400).json({ success: false, message: 'สลิปนี้ถูกใช้งานไปแล้ว ไม่สามารถนำมาใช้ซ้ำได้!' });
     }
@@ -664,24 +672,20 @@ app.post('/api/topup/verify-slip', authenticateToken, slipLimiter, upload.single
 
     const totalToAdd = actualAmount + finalBonus;
 
-    // Database atomic transaction
-    const updateBalance = db.transaction(() => {
-      db.prepare(`
-        INSERT INTO topups (ref_code, user_id, amount, bonus, method, status)
-        VALUES (?, ?, ?, ?, 'promptpay_slip', 'completed')
-      `).run(transRef, req.user.id, actualAmount, finalBonus);
+    // Record topup and credit user balance
+    await db.run(`
+      INSERT INTO topups (ref_code, user_id, amount, bonus, method, status)
+      VALUES (?, ?, ?, ?, 'promptpay_slip', 'completed')
+    `, [transRef, req.user.id, actualAmount, finalBonus]);
 
-      db.prepare('UPDATE users SET balance = balance + ? WHERE id = ?').run(totalToAdd, req.user.id);
-    });
+    await db.run('UPDATE users SET balance = balance + ? WHERE id = ?', [totalToAdd, req.user.id]);
 
-    updateBalance();
-
-    const updatedUser = db.prepare('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?').get(req.user.id);
+    const updatedUser = await db.get('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?', [req.user.id]);
 
     res.json({
       success: true,
       message: `ตรวจสลิปผ่านฉลุย! ได้รับเครดิตจำนวน ${totalToAdd.toLocaleString()} บาท (ยอดโอน ${actualAmount} บาท + โบนัส ${finalBonus} บาท)`,
-      newBalance: updatedUser.balance,
+      newBalance: Number(updatedUser.balance || 0),
       user: updatedUser,
       transRef
     });
@@ -695,7 +699,7 @@ app.post('/api/topup/verify-slip', authenticateToken, slipLimiter, upload.single
 });
 
 // TrueMoney Angpao Voucher Topup
-app.post('/api/topup/truemoney', authenticateToken, (req, res) => {
+app.post('/api/topup/truemoney', authenticateToken, async (req, res) => {
   try {
     const { voucherUrl } = req.body;
 
@@ -713,13 +717,13 @@ app.post('/api/topup/truemoney', authenticateToken, (req, res) => {
     const refCode = 'TM-' + voucherCode.substring(0, 8).toUpperCase();
 
     // Check duplicate
-    const existing = db.prepare('SELECT id FROM topups WHERE ref_code = ?').get(refCode);
+    const existing = await db.get('SELECT id FROM topups WHERE ref_code = ?', [refCode]);
     if (existing) {
       return res.status(400).json({ success: false, message: 'ซองของขวัญนี้ถูกใช้งานไปแล้ว' });
     }
 
     // TrueMoney voucher requires recipient phone number and real TrueMoney API
-    const tmPhoneSetting = db.prepare('SELECT value FROM site_settings WHERE key = ?').get('truemoney_phone');
+    const tmPhoneSetting = await db.get('SELECT value FROM site_settings WHERE key = ?', ['truemoney_phone']);
     const tmPhone = tmPhoneSetting ? tmPhoneSetting.value.trim() : '';
 
     if (!tmPhone) {
@@ -740,9 +744,9 @@ app.post('/api/topup/truemoney', authenticateToken, (req, res) => {
 });
 
 // Topup History
-app.get('/api/topup/history', authenticateToken, (req, res) => {
+app.get('/api/topup/history', authenticateToken, async (req, res) => {
   try {
-    const history = db.prepare('SELECT * FROM topups WHERE user_id = ? ORDER BY id DESC LIMIT 50').all(req.user.id);
+    const history = await db.all('SELECT * FROM topups WHERE user_id = ? ORDER BY id DESC LIMIT 50', [req.user.id]);
     res.json({ success: true, history });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -754,7 +758,7 @@ app.get('/api/topup/history', authenticateToken, (req, res) => {
 // ----------------------------------------------------
 
 // Checkout / Buy Product
-app.post('/api/orders/checkout', authenticateToken, (req, res) => {
+app.post('/api/orders/checkout', authenticateToken, async (req, res) => {
   try {
     const { productId } = req.body;
 
@@ -762,15 +766,18 @@ app.post('/api/orders/checkout', authenticateToken, (req, res) => {
       return res.status(400).json({ success: false, message: 'กรุณาระบุสินค้าที่ต้องการสั่งซื้อ' });
     }
 
-    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
+    const product = await db.get('SELECT * FROM products WHERE id = ?', [productId]);
     if (!product) {
       return res.status(404).json({ success: false, message: 'ไม่พบสินค้าในระบบ' });
     }
 
     // Check user balance
-    const user = db.prepare('SELECT balance FROM users WHERE id = ?').get(req.user.id);
-    if (user.balance < product.price) {
-      const needed = product.price - user.balance;
+    const user = await db.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
+    const currentBalance = Number(user.balance || 0);
+    const prodPrice = Number(product.price);
+
+    if (currentBalance < prodPrice) {
+      const needed = prodPrice - currentBalance;
       return res.status(400).json({
         success: false,
         message: `ยอดเงินในกระเป๋าไม่เพียงพอ (ขาดอีก ${needed.toLocaleString()} บาท) กรุณาเติมเงินก่อนสั่งซื้อ`,
@@ -784,24 +791,19 @@ app.post('/api/orders/checkout', authenticateToken, (req, res) => {
     const licenseKey = `SAMP-${keyPart.substring(0, 4)}-${keyPart.substring(4, 8)}-${keyPart.substring(8, 12)}`;
     const orderCode = 'ORD-' + Date.now().toString(36).toUpperCase() + '-' + Math.floor(100 + Math.random() * 900);
 
-    // Transaction to deduct balance, record order, update stock & sold count
-    const processOrder = db.transaction(() => {
-      // Deduct balance
-      db.prepare('UPDATE users SET balance = balance - ? WHERE id = ?').run(product.price, req.user.id);
+    // Deduct balance
+    await db.run('UPDATE users SET balance = balance - ? WHERE id = ?', [prodPrice, req.user.id]);
 
-      // Increase sold count
-      db.prepare('UPDATE products SET sold_count = sold_count + 1 WHERE id = ?').run(productId);
+    // Increase sold count
+    await db.run('UPDATE products SET sold_count = sold_count + 1 WHERE id = ?', [productId]);
 
-      // Insert order
-      const orderStmt = db.prepare(`
-        INSERT INTO orders (order_code, user_id, product_id, product_name, price, license_key, server_ip, hwid_resets_left)
-        VALUES (?, ?, ?, ?, ?, ?, '', 3)
-      `);
-      return orderStmt.run(orderCode, req.user.id, product.id, product.name, product.price, licenseKey);
-    });
+    // Insert order
+    const result = await db.run(`
+      INSERT INTO orders (order_code, user_id, product_id, product_name, price, license_key, server_ip, hwid_resets_left)
+      VALUES (?, ?, ?, ?, ?, ?, '', 3)
+    `, [orderCode, req.user.id, product.id, product.name, prodPrice, licenseKey]);
 
-    const result = processOrder();
-    const updatedUser = db.prepare('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?').get(req.user.id);
+    const updatedUser = await db.get('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?', [req.user.id]);
 
     res.json({
       success: true,
@@ -810,12 +812,12 @@ app.post('/api/orders/checkout', authenticateToken, (req, res) => {
         id: result.lastInsertRowid,
         order_code: orderCode,
         product_name: product.name,
-        price: product.price,
+        price: prodPrice,
         license_key: licenseKey,
         file_url: product.file_url,
         hwid_resets_left: 3
       },
-      newBalance: updatedUser.balance,
+      newBalance: Number(updatedUser.balance || 0),
       user: updatedUser
     });
   } catch (err) {
@@ -824,15 +826,15 @@ app.post('/api/orders/checkout', authenticateToken, (req, res) => {
 });
 
 // User's Purchased Inventory & Licenses
-app.get('/api/user/orders', authenticateToken, (req, res) => {
+app.get('/api/user/orders', authenticateToken, async (req, res) => {
   try {
-    const orders = db.prepare(`
+    const orders = await db.all(`
       SELECT o.*, p.image, p.samp_version, p.file_url, p.short_desc
       FROM orders o
       JOIN products p ON o.product_id = p.id
       WHERE o.user_id = ?
       ORDER BY o.id DESC
-    `).all(req.user.id);
+    `, [req.user.id]);
 
     res.json({ success: true, orders });
   } catch (err) {
@@ -841,7 +843,7 @@ app.get('/api/user/orders', authenticateToken, (req, res) => {
 });
 
 // Bind Server IP to License Key
-app.post('/api/user/bind-ip', authenticateToken, (req, res) => {
+app.post('/api/user/bind-ip', authenticateToken, async (req, res) => {
   try {
     const { orderId, serverIp } = req.body;
 
@@ -849,7 +851,7 @@ app.post('/api/user/bind-ip', authenticateToken, (req, res) => {
       return res.status(400).json({ success: false, message: 'กรุณากรอกไอพีเซิร์ฟเวอร์ที่ต้องการผูก' });
     }
 
-    const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, req.user.id);
+    const order = await db.get('SELECT * FROM orders WHERE id = ? AND user_id = ?', [orderId, req.user.id]);
     if (!order) {
       return res.status(404).json({ success: false, message: 'ไม่พบรายการคำสั่งซื้อของคุณ' });
     }
@@ -857,7 +859,7 @@ app.post('/api/user/bind-ip', authenticateToken, (req, res) => {
     // Clean IP format (e.g. 103.20.205.12:7777 or 127.0.0.1)
     const cleanedIp = serverIp.trim();
 
-    db.prepare('UPDATE orders SET server_ip = ? WHERE id = ?').run(cleanedIp, orderId);
+    await db.run('UPDATE orders SET server_ip = ? WHERE id = ?', [cleanedIp, orderId]);
 
     res.json({
       success: true,
@@ -870,7 +872,7 @@ app.post('/api/user/bind-ip', authenticateToken, (req, res) => {
 });
 
 // Reset HWID / IP Lock (Rank1Shop Signature Feature!)
-app.post('/api/user/reset-hwid', authenticateToken, (req, res) => {
+app.post('/api/user/reset-hwid', authenticateToken, async (req, res) => {
   try {
     const { orderId, newServerIp } = req.body;
 
@@ -878,7 +880,7 @@ app.post('/api/user/reset-hwid', authenticateToken, (req, res) => {
       return res.status(400).json({ success: false, message: 'กรุณาระบุรายการคำสั่งซื้อ' });
     }
 
-    const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, req.user.id);
+    const order = await db.get('SELECT * FROM orders WHERE id = ? AND user_id = ?', [orderId, req.user.id]);
     if (!order) {
       return res.status(404).json({ success: false, message: 'ไม่พบรายการคำสั่งซื้อของคุณ' });
     }
@@ -893,22 +895,18 @@ app.post('/api/user/reset-hwid', authenticateToken, (req, res) => {
     const oldIp = order.server_ip || 'ยังไม่ได้ผูก IP';
     const newIp = (newServerIp || '').trim();
 
-    const doReset = db.transaction(() => {
-      db.prepare(`
-        UPDATE orders 
-        SET server_ip = ?, hwid_resets_left = hwid_resets_left - 1
-        WHERE id = ?
-      `).run(newIp, orderId);
+    await db.run(`
+      UPDATE orders 
+      SET server_ip = ?, hwid_resets_left = hwid_resets_left - 1
+      WHERE id = ?
+    `, [newIp, orderId]);
 
-      db.prepare(`
-        INSERT INTO hwid_logs (order_id, user_id, old_ip, new_ip)
-        VALUES (?, ?, ?, ?)
-      `).run(orderId, req.user.id, oldIp, newIp);
-    });
+    await db.run(`
+      INSERT INTO hwid_logs (order_id, user_id, old_ip, new_ip)
+      VALUES (?, ?, ?, ?)
+    `, [orderId, req.user.id, oldIp, newIp]);
 
-    doReset();
-
-    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    const updatedOrder = await db.get('SELECT * FROM orders WHERE id = ?', [orderId]);
 
     res.json({
       success: true,
@@ -926,28 +924,34 @@ app.post('/api/user/reset-hwid', authenticateToken, (req, res) => {
 // ----------------------------------------------------
 
 // Admin Dashboard Summary
-app.get('/api/admin/dashboard', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/dashboard', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const totalUsers = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-    const totalProducts = db.prepare('SELECT COUNT(*) as count FROM products').get().count;
-    const totalOrders = db.prepare('SELECT COUNT(*) as count FROM orders').get().count;
-    const totalRevenue = db.prepare('SELECT COALESCE(SUM(price), 0) as sum FROM orders').get().sum;
-    const totalTopup = db.prepare('SELECT COALESCE(SUM(amount), 0) as sum FROM topups').get().sum;
+    const userRow = await db.get('SELECT COUNT(*) as count FROM users');
+    const prodRow = await db.get('SELECT COUNT(*) as count FROM products');
+    const orderRow = await db.get('SELECT COUNT(*) as count FROM orders');
+    const revRow = await db.get('SELECT COALESCE(SUM(price), 0) as sum FROM orders');
+    const topupRow = await db.get('SELECT COALESCE(SUM(amount), 0) as sum FROM topups');
 
-    const recentOrders = db.prepare(`
+    const totalUsers = Number(userRow?.count || 0);
+    const totalProducts = Number(prodRow?.count || 0);
+    const totalOrders = Number(orderRow?.count || 0);
+    const totalRevenue = Number(revRow?.sum || 0);
+    const totalTopup = Number(topupRow?.sum || 0);
+
+    const recentOrders = await db.all(`
       SELECT o.*, u.username
       FROM orders o
       JOIN users u ON o.user_id = u.id
       ORDER BY o.id DESC
       LIMIT 10
-    `).all();
+    `);
 
-    const topSelling = db.prepare(`
+    const topSelling = await db.all(`
       SELECT id, name, price, sold_count, image
       FROM products
       ORDER BY sold_count DESC
       LIMIT 5
-    `).all();
+    `);
 
     res.json({
       success: true,
@@ -967,16 +971,16 @@ app.get('/api/admin/dashboard', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Admin Products CRUD
-app.get('/api/admin/products', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/products', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const products = db.prepare('SELECT * FROM products ORDER BY id DESC').all();
+    const products = await db.all('SELECT * FROM products ORDER BY id DESC');
     res.json({ success: true, products });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-app.post('/api/admin/products', authenticateToken, requireAdmin, uploadProductCover.single('imageFile'), (req, res) => {
+app.post('/api/admin/products', authenticateToken, requireAdmin, uploadProductCover.single('imageFile'), async (req, res) => {
   try {
     const {
       name, slug, category_slug, price, original_price, badge, samp_version,
@@ -998,15 +1002,13 @@ app.post('/api/admin/products', authenticateToken, requireAdmin, uploadProductCo
     const finalCat = category_slug || 'script';
     const finalSlug = slug || (name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString(36));
 
-    const insert = db.prepare(`
+    const result = await db.run(`
       INSERT INTO products (
         name, slug, category_slug, price, original_price, badge, samp_version,
         short_desc, description, features, requirements, code_snippet,
         image, file_url, is_featured
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const result = insert.run(
+    `, [
       name,
       finalSlug,
       finalCat,
@@ -1022,7 +1024,7 @@ app.post('/api/admin/products', authenticateToken, requireAdmin, uploadProductCo
       finalImage,
       file_url || 'https://github.com/samp-releases/demo-package.zip',
       is_featured ? 1 : 0
-    );
+    ]);
 
     res.json({ success: true, message: 'เพิ่มสคริปต์ใหม่เรียบร้อยแล้ว!', id: result.lastInsertRowid, image: finalImage });
   } catch (err) {
@@ -1030,7 +1032,7 @@ app.post('/api/admin/products', authenticateToken, requireAdmin, uploadProductCo
   }
 });
 
-app.put('/api/admin/products/:id', authenticateToken, requireAdmin, uploadProductCover.single('imageFile'), (req, res) => {
+app.put('/api/admin/products/:id', authenticateToken, requireAdmin, uploadProductCover.single('imageFile'), async (req, res) => {
   try {
     const id = req.params.id;
     const {
@@ -1039,7 +1041,7 @@ app.put('/api/admin/products/:id', authenticateToken, requireAdmin, uploadProduc
       image, file_url, is_featured
     } = req.body;
 
-    const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    const existing = await db.get('SELECT * FROM products WHERE id = ?', [id]);
     if (!existing) {
       return res.status(404).json({ success: false, message: 'ไม่พบสินค้า' });
     }
@@ -1053,14 +1055,14 @@ app.put('/api/admin/products/:id', authenticateToken, requireAdmin, uploadProduc
 
     const finalCat = category_slug || existing.category_slug || 'script';
 
-    db.prepare(`
+    await db.run(`
       UPDATE products SET
         name = ?, category_slug = ?, price = ?, original_price = ?,
         badge = ?, samp_version = ?, short_desc = ?, description = ?,
         features = ?, requirements = ?, code_snippet = ?, image = ?,
         file_url = ?, is_featured = ?
       WHERE id = ?
-    `).run(
+    `, [
       name || existing.name,
       finalCat,
       price ? Number(price) : existing.price,
@@ -1076,7 +1078,7 @@ app.put('/api/admin/products/:id', authenticateToken, requireAdmin, uploadProduc
       file_url || existing.file_url,
       is_featured !== undefined ? (is_featured ? 1 : 0) : existing.is_featured,
       id
-    );
+    ]);
 
     res.json({ success: true, message: 'อัปเดตข้อมูลสินค้าเรียบร้อย!' });
   } catch (err) {
@@ -1084,9 +1086,9 @@ app.put('/api/admin/products/:id', authenticateToken, requireAdmin, uploadProduc
   }
 });
 
-app.delete('/api/admin/products/:id', authenticateToken, requireAdmin, (req, res) => {
+app.delete('/api/admin/products/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    db.prepare('DELETE FROM products WHERE id = ?').run(req.params.id);
+    await db.run('DELETE FROM products WHERE id = ?', [req.params.id]);
     res.json({ success: true, message: 'ลบสินค้าเรียบร้อยแล้ว' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -1094,16 +1096,16 @@ app.delete('/api/admin/products/:id', authenticateToken, requireAdmin, (req, res
 });
 
 // Admin Users List and Balance Adjust
-app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const users = db.prepare('SELECT id, username, email, role, balance, avatar, created_at FROM users ORDER BY id DESC').all();
+    const users = await db.all('SELECT id, username, email, role, balance, avatar, created_at FROM users ORDER BY id DESC');
     res.json({ success: true, users });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-app.post('/api/admin/users/:id/balance', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/users/:id/balance', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { amount, action } = req.body; // action: 'add' or 'set'
     const numAmount = Number(amount);
@@ -1114,34 +1116,30 @@ app.post('/api/admin/users/:id/balance', authenticateToken, requireAdmin, (req, 
     }
 
     if (action === 'set') {
-      db.prepare('UPDATE users SET balance = ? WHERE id = ?').run(numAmount, userId);
+      await db.run('UPDATE users SET balance = ? WHERE id = ?', [numAmount, userId]);
     } else {
-      db.prepare('UPDATE users SET balance = balance + ? WHERE id = ?').run(numAmount, userId);
+      await db.run('UPDATE users SET balance = balance + ? WHERE id = ?', [numAmount, userId]);
     }
 
-    const updated = db.prepare('SELECT id, username, email, role, balance FROM users WHERE id = ?').get(userId);
-    res.json({ success: true, message: `ปรับยอดเงินของ ${updated.username} สำเร็จ เป็น ฿${updated.balance.toLocaleString()}`, user: updated });
+    const updated = await db.get('SELECT id, username, email, role, balance FROM users WHERE id = ?', [userId]);
+    res.json({ success: true, message: `ปรับยอดเงินของ ${updated.username} สำเร็จ เป็น ฿${Number(updated.balance).toLocaleString()}`, user: updated });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // Admin Settings Update
-app.post('/api/admin/settings', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/settings', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { settings } = req.body;
     if (!settings || typeof settings !== 'object') {
       return res.status(400).json({ success: false, message: 'ข้อมูลการตั้งค่าไม่ถูกต้อง' });
     }
 
-    const insertSetting = db.prepare('INSERT OR REPLACE INTO site_settings (key, value) VALUES (?, ?)');
-    const updateAll = db.transaction(() => {
-      for (const [key, val] of Object.entries(settings)) {
-        insertSetting.run(key, String(val));
-      }
-    });
+    for (const [key, val] of Object.entries(settings)) {
+      await db.run('INSERT OR REPLACE INTO site_settings (key, value) VALUES (?, ?)', [key, String(val)]);
+    }
 
-    updateAll();
     res.json({ success: true, message: 'บันทึกการตั้งค่าร้านค้าเรียบร้อยแล้ว!' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -1151,14 +1149,19 @@ app.post('/api/admin/settings', authenticateToken, requireAdmin, (req, res) => {
 // ----------------------------------------------------
 // 🛡️ Admin Security Center APIs (Live Monitoring & Logs)
 // ----------------------------------------------------
-app.get('/api/admin/security/stats', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/security/stats', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const totalBlocked = db.prepare('SELECT COUNT(*) as count FROM security_logs').get().count;
-    const scannerCount = db.prepare("SELECT COUNT(*) as count FROM security_logs WHERE threat_type = 'VULNERABILITY_SCANNER'").get().count;
-    const probeCount = db.prepare("SELECT COUNT(*) as count FROM security_logs WHERE threat_type = 'PROBE_EXPLOIT_PATH'").get().count;
-    const rateLimitCount = db.prepare("SELECT COUNT(*) as count FROM security_logs WHERE threat_type = 'RATE_LIMIT_EXCEEDED' OR threat_type = 'AUTH_BRUTE_FORCE' OR threat_type = 'SLIP_SPAM_FLOOD'").get().count;
+    const totalBlockedRow = await db.get('SELECT COUNT(*) as count FROM security_logs');
+    const scannerCountRow = await db.get("SELECT COUNT(*) as count FROM security_logs WHERE threat_type = 'VULNERABILITY_SCANNER'");
+    const probeCountRow = await db.get("SELECT COUNT(*) as count FROM security_logs WHERE threat_type = 'PROBE_EXPLOIT_PATH'");
+    const rateLimitCountRow = await db.get("SELECT COUNT(*) as count FROM security_logs WHERE threat_type = 'RATE_LIMIT_EXCEEDED' OR threat_type = 'AUTH_BRUTE_FORCE' OR threat_type = 'SLIP_SPAM_FLOOD'");
 
-    const recentLogs = db.prepare('SELECT * FROM security_logs ORDER BY id DESC LIMIT 25').all();
+    const totalBlocked = Number(totalBlockedRow?.count || 0);
+    const scannerCount = Number(scannerCountRow?.count || 0);
+    const probeCount = Number(probeCountRow?.count || 0);
+    const rateLimitCount = Number(rateLimitCountRow?.count || 0);
+
+    const recentLogs = await db.all('SELECT * FROM security_logs ORDER BY id DESC LIMIT 25');
 
     res.json({
       success: true,
@@ -1184,9 +1187,9 @@ app.get('/api/admin/security/stats', authenticateToken, requireAdmin, (req, res)
   }
 });
 
-app.post('/api/admin/security/clear-logs', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/security/clear-logs', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    db.prepare('DELETE FROM security_logs').run();
+    await db.run('DELETE FROM security_logs');
     res.json({ success: true, message: 'ล้างประวัติการสกัดกั้นเรียบร้อยแล้ว' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

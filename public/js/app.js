@@ -73,8 +73,12 @@ function switchView(viewName) {
     loadUserOrders();
   } else if (viewName === 'topup') {
     loadTopupHistory();
+  } else if (viewName === 'creator') {
+    loadCreatorDashboard();
   } else if (viewName === 'admin') {
     loadAdminProducts();
+    loadAdminMarketplacePending();
+    loadAdminWithdrawals();
     loadSecurityDashboard();
   }
 }
@@ -85,6 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupModals();
   setupTopup();
   setupAdminForm();
+  setupCreatorMarketplace();
 
   await checkAuth();
   await loadProducts();
@@ -129,6 +134,7 @@ async function checkAuth() {
 function renderUserNav() {
   const navAuth = document.getElementById('navAuth');
   const adminLink = document.getElementById('navAdminLink');
+  const creatorLink = document.getElementById('navCreatorLink');
   if (!navAuth) return;
 
   // Show/Hide Admin Nav Button
@@ -138,6 +144,13 @@ function renderUserNav() {
     if (adminLink) adminLink.style.display = 'none';
   }
 
+  // Show/Hide Creator Nav Button
+  if (state.user) {
+    if (creatorLink) creatorLink.style.display = 'flex';
+  } else {
+    if (creatorLink) creatorLink.style.display = 'none';
+  }
+
   if (state.user) {
     navAuth.innerHTML = `
       <div class="user-badge" id="userMenuToggle">
@@ -145,10 +158,16 @@ function renderUserNav() {
         <div>
           <div class="user-name">${state.user.username}</div>
           <div class="user-balance-pill">฿ ${Number(state.user.balance).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</div>
+          ${Number(state.user.seller_balance || 0) > 0 ? `
+            <div style="font-size: 0.72rem; color: var(--accent-emerald); font-weight: 700; margin-top: 1px;">
+              รายได้: ฿${Number(state.user.seller_balance).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+            </div>
+          ` : ''}
         </div>
         <div class="user-dropdown" id="userDropdown">
           <a class="dropdown-item" href="#topup" data-view="topup">💳 เติมเงิน</a>
           <a class="dropdown-item" href="#orders" data-view="orders">📦 สคริปต์ของฉัน</a>
+          <a class="dropdown-item" href="#creator" data-view="creator" style="color: var(--accent-emerald);">💼 ฝากขายสคริปต์ (Creator)</a>
           ${state.user.role === 'admin' ? `
             <a class="dropdown-item" href="#admin" data-view="admin" style="color: var(--accent-rose); font-weight: 600;">
               👑 จัดการสคริปต์ (Admin)
@@ -356,8 +375,11 @@ function renderProducts() {
         <div class="product-badge-pill">${p.samp_version || '0.3.7'}</div>
       </div>
       <div class="product-card-body">
-        <h3 class="product-card-title">${p.name}</h3>
-        <p class="product-card-desc">${p.short_desc || ''}</p>
+        <h3 class="product-card-title">${escapeHtml(p.name)}</h3>
+        <div style="font-size: 0.78rem; color: var(--accent-cyan); margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.3rem;">
+          <span>👤 ผู้สร้าง:</span> <b style="color: #fff;">${escapeHtml(p.seller_name || 'Nexus Official')}</b>
+        </div>
+        <p class="product-card-desc">${escapeHtml(p.short_desc || '')}</p>
         <div class="product-card-footer">
           <div class="product-price-box">
             <strong>฿${p.price.toLocaleString()}</strong>
@@ -1145,3 +1167,358 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// ----------------------------------------------------
+// 🛒 CREATOR MARKETPLACE & SELLER WITHDRAWAL SYSTEM
+// ----------------------------------------------------
+
+function switchCreatorTab(tabName) {
+  const tabs = ['my-scripts', 'submit', 'withdraw'];
+  tabs.forEach(t => {
+    const btn = document.getElementById(`tabCreator${t === 'my-scripts' ? 'MyScripts' : (t === 'submit' ? 'Submit' : 'Withdraw')}`);
+    const content = document.getElementById(`creatorTab${t === 'my-scripts' ? 'MyScripts' : (t === 'submit' ? 'Submit' : 'Withdraw')}Content`);
+    if (btn) btn.classList.toggle('active', t === tabName);
+    if (content) content.style.display = t === tabName ? 'block' : 'none';
+  });
+
+  if (tabName === 'my-scripts' || tabName === 'withdraw') {
+    loadCreatorDashboard();
+  }
+}
+
+function setupCreatorMarketplace() {
+  // Real-time Fee Preview (80% Creator / 20% Admin)
+  const priceInput = document.getElementById('creatorProdPrice');
+  const feePreview = document.getElementById('creatorFeePreview');
+  if (priceInput && feePreview) {
+    priceInput.addEventListener('input', () => {
+      const p = Number(priceInput.value) || 0;
+      const earnings = Math.round(p * 0.80);
+      feePreview.innerHTML = `คุณจะได้รับ 80% = <b style="color: var(--accent-emerald);">฿${earnings.toLocaleString()} บาท</b> (แอดมินหักค่าธรรมเนียม 20% = ฿${(p - earnings).toLocaleString()} บาท)`;
+    });
+  }
+
+  // Handle Creator Product Submission
+  const formSubmit = document.getElementById('formSubmitCreatorProduct');
+  if (formSubmit) {
+    formSubmit.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (!state.user) {
+        showToast('กรุณาเข้าสู่ระบบก่อนส่งสคริปต์ฝากขาย', 'error');
+        openAuthModal('login');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('name', document.getElementById('creatorProdName').value.trim());
+      formData.append('category_slug', document.getElementById('creatorProdCategory').value);
+      formData.append('price', document.getElementById('creatorProdPrice').value);
+      formData.append('file_url', document.getElementById('creatorProdFileUrl').value.trim());
+      formData.append('samp_version', document.getElementById('creatorProdSampVer').value.trim());
+      formData.append('short_desc', document.getElementById('creatorProdShortDesc').value.trim());
+      formData.append('description', document.getElementById('creatorProdDesc').value.trim());
+
+      const fileInput = document.getElementById('creatorProdImageFile');
+      if (fileInput && fileInput.files[0]) {
+        formData.append('imageFile', fileInput.files[0]);
+      }
+
+      showToast('กำลังส่งข้อมูลและไฟล์สคริปต์เข้าสู่ระบบ...');
+
+      try {
+        const res = await fetch('/api/seller/products', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${state.token}`
+          },
+          body: formData
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast(data.message);
+          formSubmit.reset();
+          switchCreatorTab('my-scripts');
+          loadCreatorDashboard();
+        } else {
+          showToast(data.message, 'error');
+        }
+      } catch (err) {
+        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+      }
+    });
+  }
+
+  // Handle Withdrawal Request
+  const formWithdraw = document.getElementById('formRequestWithdrawal');
+  if (formWithdraw) {
+    formWithdraw.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const amount = Number(document.getElementById('withdrawAmount').value);
+      const bank_name = document.getElementById('withdrawBank').value;
+      const account_number = document.getElementById('withdrawAccountNumber').value.trim();
+      const account_name = document.getElementById('withdrawAccountName').value.trim();
+
+      if (!amount || amount < 50) {
+        showToast('ยอดถอนขั้นต่ำคือ 50 บาท', 'error');
+        return;
+      }
+
+      const res = await api('/api/seller/withdraw', {
+        method: 'POST',
+        body: JSON.stringify({ amount, bank_name, account_number, account_name })
+      });
+
+      if (res.success) {
+        showToast(res.message);
+        formWithdraw.reset();
+        await checkAuth(); // update balance on nav
+        loadCreatorDashboard();
+      } else {
+        showToast(res.message, 'error');
+      }
+    });
+  }
+}
+
+async function loadCreatorDashboard() {
+  if (!state.token) return;
+
+  const res = await api('/api/seller/dashboard');
+  if (!res.success || !res.seller) return;
+
+  const s = res.seller;
+
+  // Update Stat Cards
+  const elBalance = document.getElementById('creatorSellerBalance');
+  const elEarned = document.getElementById('creatorTotalEarned');
+  const elOrders = document.getElementById('creatorTotalOrders');
+  const elCount = document.getElementById('creatorProductsCount');
+  const elAvail = document.getElementById('withdrawAvailable');
+
+  if (elBalance) elBalance.textContent = `฿${Number(s.sellerBalance).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+  if (elEarned) elEarned.textContent = `฿${Number(s.totalEarned).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+  if (elOrders) elOrders.textContent = `${Number(s.totalOrders).toLocaleString()} ชิ้น`;
+  if (elCount) elCount.textContent = `${Number(s.productsCount).toLocaleString()} รายการ`;
+  if (elAvail) elAvail.textContent = `฿${Number(s.sellerBalance).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+
+  // Render My Scripts
+  const tbodyScripts = document.getElementById('creatorMyScriptsTbody');
+  if (tbodyScripts) {
+    if (!s.myProducts || s.myProducts.length === 0) {
+      tbodyScripts.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 2rem;">คุณยังไม่เคยวางขายสคริปต์ กดปุ่ม "ส่งสคริปต์ฝากขายใหม่" เพื่อเริ่มต้นได้เลย!</td></tr>`;
+    } else {
+      tbodyScripts.innerHTML = s.myProducts.map(p => {
+        let statusBadge = '';
+        if (p.status === 'pending') {
+          statusBadge = `<span style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.3); padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700;">🟡 รอแอดมินตรวจสอบ</span>`;
+        } else if (p.status === 'approved') {
+          statusBadge = `<span style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.3); padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700;">🟢 วางขายอยู่</span>`;
+        } else {
+          statusBadge = `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.3); padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700;" title="${escapeHtml(p.reject_reason || '')}">🔴 ปฏิเสธ: ${escapeHtml(p.reject_reason || 'ไม่ผ่านเกณฑ์')}</span>`;
+        }
+
+        const creatorShare = Math.round(p.price * 0.80);
+
+        return `
+          <tr>
+            <td style="color: var(--text-dim); font-family: var(--font-mono);">${p.id}</td>
+            <td>
+              <div style="font-weight: 700; color: #fff;">${escapeHtml(p.name)}</div>
+              <div style="font-size: 0.75rem; color: var(--text-dim);">${escapeHtml(p.category_slug)} • SA-MP ${escapeHtml(p.samp_version)}</div>
+            </td>
+            <td style="font-family: var(--font-mono); font-weight: 700;">฿${Number(p.price).toLocaleString()}</td>
+            <td style="font-family: var(--font-mono); color: var(--accent-emerald); font-weight: 700;">฿${creatorShare.toLocaleString()}</td>
+            <td style="font-family: var(--font-mono);">${Number(p.sold_count || 0)} ชิ้น</td>
+            <td>${statusBadge}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  // Render Withdrawals History
+  const tbodyWithdrawals = document.getElementById('creatorWithdrawalsTbody');
+  if (tbodyWithdrawals) {
+    if (!s.withdrawals || s.withdrawals.length === 0) {
+      tbodyWithdrawals.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">ยังไม่มีประวัติการถอนเงิน</td></tr>`;
+    } else {
+      tbodyWithdrawals.innerHTML = s.withdrawals.map(w => {
+        let badge = '';
+        if (w.status === 'pending') {
+          badge = `<span style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); padding: 2px 6px; border-radius: 4px; font-size: 0.74rem; font-weight: 700;">🟡 รอแอดมินโอนเงิน</span>`;
+        } else if (w.status === 'completed') {
+          badge = `<span style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.74rem; font-weight: 700;">🟢 โอนเงินแล้ว</span>`;
+        } else {
+          badge = `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.74rem; font-weight: 700;">🔴 ปฏิเสธ (คืนเงิน)</span>`;
+        }
+
+        return `
+          <tr>
+            <td style="color: var(--text-dim); font-size: 0.78rem;">${(w.created_at || '').substring(0, 10)}</td>
+            <td style="font-family: var(--font-mono); color: var(--accent-emerald); font-weight: 700;">฿${Number(w.amount).toLocaleString()}</td>
+            <td style="font-size: 0.8rem;">
+              <div>${escapeHtml(w.bank_name)}</div>
+              <code style="color: var(--accent-cyan); font-size: 0.76rem;">${escapeHtml(w.account_number)}</code> (${escapeHtml(w.account_name)})
+            </td>
+            <td>${badge}</td>
+            <td style="font-size: 0.76rem; color: var(--text-dim);">${escapeHtml(w.admin_note || '-')}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+}
+
+// ----------------------------------------------------
+// 👑 ADMIN MARKETPLACE REVIEW & WITHDRAWAL PAYOUT
+// ----------------------------------------------------
+
+async function loadAdminMarketplacePending() {
+  const res = await api('/api/admin/marketplace/pending');
+  if (!res.success) return;
+
+  const countBadge = document.getElementById('badgePendingCount');
+  if (countBadge) countBadge.textContent = res.products.length;
+
+  const tbody = document.getElementById('adminPendingProductsTbody');
+  if (!tbody) return;
+
+  if (res.products.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">ไม่มีสคริปต์รอตรวจสอบในขณะนี้ (ตรวจหมดแล้ว 100%)</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = res.products.map(p => `
+    <tr>
+      <td>
+        <b style="color: var(--accent-cyan);">👤 ${escapeHtml(p.seller_name || 'Creator')}</b>
+        <div style="font-size: 0.75rem; color: var(--text-dim);">${escapeHtml(p.seller_email || '')}</div>
+      </td>
+      <td>
+        <div style="font-weight: 700; color: #fff;">${escapeHtml(p.name)}</div>
+        <div style="font-size: 0.78rem; color: var(--text-muted);">${escapeHtml(p.short_desc || '')}</div>
+      </td>
+      <td style="font-family: var(--font-mono); font-weight: 700;">฿${Number(p.price).toLocaleString()}</td>
+      <td>
+        <a href="${escapeHtml(p.file_url)}" target="_blank" style="color: var(--accent-cyan); text-decoration: underline; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 4px;">
+          🔗 ลิงก์ดาวน์โหลดเพื่อตรวจโค้ด
+        </a>
+      </td>
+      <td style="text-align: right;">
+        <button class="btn btn-sm" style="background: var(--accent-emerald); color: #000; font-weight: 700; margin-right: 4px;" onclick="reviewCreatorProduct(${p.id}, 'approve')">
+          ✅ อนุมัติ
+        </button>
+        <button class="btn btn-sm" style="background: rgba(244, 63, 94, 0.2); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.4);" onclick="reviewCreatorProduct(${p.id}, 'reject')">
+          ❌ ปฏิเสธ
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function reviewCreatorProduct(id, action) {
+  let reject_reason = '';
+  if (action === 'reject') {
+    reject_reason = prompt('กรุณาระบุเหตุผลการปฏิเสธ (เช่น สคริปต์มีบั๊ก, มีโค้ดอันตราย, ข้อมูลไม่ครบถ้วน):');
+    if (!reject_reason) return;
+  } else {
+    if (!confirm('ยืนยันอนุมัติสคริปต์นี้ขึ้นวางจำหน่ายบนหน้าร้าน Nexus SAMP Store ทันทีหรือไม่?')) return;
+  }
+
+  const res = await api(`/api/admin/marketplace/review/${id}`, {
+    method: 'POST',
+    body: JSON.stringify({ action, reject_reason })
+  });
+
+  if (res.success) {
+    showToast(res.message);
+    loadAdminMarketplacePending();
+    loadProducts(); // refresh catalog
+  } else {
+    showToast(res.message, 'error');
+  }
+}
+
+async function loadAdminWithdrawals() {
+  const res = await api('/api/admin/withdrawals');
+  if (!res.success) return;
+
+  const pendingCount = res.withdrawals.filter(w => w.status === 'pending').length;
+  const countBadge = document.getElementById('badgeWithdrawalCount');
+  if (countBadge) countBadge.textContent = pendingCount;
+
+  const tbody = document.getElementById('adminWithdrawalsTbody');
+  if (!tbody) return;
+
+  if (res.withdrawals.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">ไม่มีคำขอถอนเงินที่รอดำเนินการ</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = res.withdrawals.map(w => {
+    let statusBadge = '';
+    let actionBtns = '';
+
+    if (w.status === 'pending') {
+      statusBadge = `<span style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700;">🟡 รอแอดมินโอน</span>`;
+      actionBtns = `
+        <button class="btn btn-sm" style="background: var(--accent-emerald); color: #000; font-weight: 700; margin-right: 4px;" onclick="actionWithdrawal(${w.id}, 'complete')">
+          ✅ โอนเงินแล้ว
+        </button>
+        <button class="btn btn-sm" style="background: rgba(244, 63, 94, 0.2); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.4);" onclick="actionWithdrawal(${w.id}, 'reject')">
+          ❌ ปฏิเสธ (คืนเงิน)
+        </button>
+      `;
+    } else if (w.status === 'completed') {
+      statusBadge = `<span style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700;">🟢 โอนเงินแล้ว</span>`;
+      actionBtns = `<span style="font-size: 0.75rem; color: var(--text-dim);">${escapeHtml(w.admin_note || 'เรียบร้อย')}</span>`;
+    } else {
+      statusBadge = `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700;">🔴 ปฏิเสธ</span>`;
+      actionBtns = `<span style="font-size: 0.75rem; color: var(--accent-rose);">${escapeHtml(w.admin_note || 'ยกเลิก')}</span>`;
+    }
+
+    return `
+      <tr>
+        <td>
+          <b style="color: #fff;">${escapeHtml(w.username)}</b>
+          <div style="font-size: 0.74rem; color: var(--text-dim);">${escapeHtml(w.email)}</div>
+        </td>
+        <td style="font-family: var(--font-mono); font-weight: 900; color: var(--accent-emerald); font-size: 1.05rem;">
+          ฿${Number(w.amount).toLocaleString()}
+        </td>
+        <td style="font-size: 0.84rem;">${escapeHtml(w.bank_name)}</td>
+        <td><code style="color: var(--accent-cyan); font-weight: 700;">${escapeHtml(w.account_number)}</code></td>
+        <td style="font-weight: 700; color: #fff;">${escapeHtml(w.account_name)}</td>
+        <td>${statusBadge}</td>
+        <td style="text-align: right;">${actionBtns}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function actionWithdrawal(id, action) {
+  let note = '';
+  if (action === 'complete') {
+    note = prompt('ระบุหมายเลขอ้างอิงสลิปโอนเงิน (หรือปล่อยว่างเพื่อยืนยัน):', 'โอนเงินเรียบร้อยผ่าน Mobile Banking');
+    if (note === null) return;
+  } else {
+    note = prompt('ระบุเหตุผลการปฏิเสธ (ระบบจะคืนเงินเข้ากระเป๋าผู้ขายให้อัตโนมัติ):', 'ข้อมูลบัญชีไม่ถูกต้อง หรือไม่สามารถโอนได้');
+    if (!note) return;
+  }
+
+  const res = await api(`/api/admin/withdrawals/${id}/action`, {
+    method: 'POST',
+    body: JSON.stringify({ action, admin_note: note })
+  });
+
+  if (res.success) {
+    showToast(res.message);
+    loadAdminWithdrawals();
+  } else {
+    showToast(res.message, 'error');
+  }
+}
+

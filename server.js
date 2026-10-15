@@ -230,7 +230,7 @@ function authenticateToken(req, res, next) {
     }
     try {
       // Fetch fresh user data from DB
-      const freshUser = await db.get('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?', [user.id]);
+      const freshUser = await db.get('SELECT id, username, email, role, balance, COALESCE(seller_balance, 0) as seller_balance, avatar FROM users WHERE id = ?', [user.id]);
       if (!freshUser) {
         return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลผู้ใช้งาน' });
       }
@@ -309,35 +309,41 @@ app.get('/api/categories', async (req, res) => {
 });
 
 // Products List
+// Products List (Approved Marketplace & Official Store)
 app.get('/api/products', async (req, res) => {
   try {
     const { category, search, sort, featured } = req.query;
-    let query = 'SELECT * FROM products WHERE 1=1';
+    let query = `
+      SELECT p.*, COALESCE(u.username, 'Nexus Official') as seller_name
+      FROM products p
+      LEFT JOIN users u ON p.seller_id = u.id
+      WHERE (p.status = 'approved' OR p.status IS NULL)
+    `;
     const params = [];
 
     if (category && category !== 'all') {
-      query += ' AND category_slug = ?';
+      query += ' AND p.category_slug = ?';
       params.push(category);
     }
 
     if (search) {
-      query += ' AND (name LIKE ? OR short_desc LIKE ? OR description LIKE ?)';
+      query += ' AND (p.name LIKE ? OR p.short_desc LIKE ? OR p.description LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     if (featured === '1') {
-      query += ' AND is_featured = 1';
+      query += ' AND p.is_featured = 1';
     }
 
     // Sort order
     if (sort === 'price_asc') {
-      query += ' ORDER BY price ASC';
+      query += ' ORDER BY p.price ASC';
     } else if (sort === 'price_desc') {
-      query += ' ORDER BY price DESC';
+      query += ' ORDER BY p.price DESC';
     } else if (sort === 'popular') {
-      query += ' ORDER BY sold_count DESC';
+      query += ' ORDER BY p.sold_count DESC';
     } else {
-      query += ' ORDER BY id DESC';
+      query += ' ORDER BY p.id DESC';
     }
 
     const products = await db.all(query, params);
@@ -360,13 +366,23 @@ app.get('/api/products/:id', async (req, res) => {
     const id = req.params.id;
     let product;
     if (isNaN(id)) {
-      product = await db.get('SELECT * FROM products WHERE slug = ?', [id]);
+      product = await db.get(`
+        SELECT p.*, COALESCE(u.username, 'Nexus Official') as seller_name
+        FROM products p
+        LEFT JOIN users u ON p.seller_id = u.id
+        WHERE p.slug = ? AND (p.status = 'approved' OR p.status IS NULL)
+      `, [id]);
     } else {
-      product = await db.get('SELECT * FROM products WHERE id = ?', [Number(id)]);
+      product = await db.get(`
+        SELECT p.*, COALESCE(u.username, 'Nexus Official') as seller_name
+        FROM products p
+        LEFT JOIN users u ON p.seller_id = u.id
+        WHERE p.id = ? AND (p.status = 'approved' OR p.status IS NULL)
+      `, [Number(id)]);
     }
 
     if (!product) {
-      return res.status(404).json({ success: false, message: 'ไม่พบสินค้าที่ระบุ' });
+      return res.status(404).json({ success: false, message: 'ไม่พบสินค้าที่ระบุ หรือสินค้านี้อยู่ระหว่างการตรวจสอบ' });
     }
 
     try { product.features = JSON.parse(product.features || '[]'); } catch (e) { product.features = []; }
@@ -797,11 +813,23 @@ app.post('/api/orders/checkout', authenticateToken, async (req, res) => {
     // Increase sold count
     await db.run('UPDATE products SET sold_count = sold_count + 1 WHERE id = ?', [productId]);
 
+    // Marketplace Revenue Share: 20% to Admin, 80% to Seller
+    let adminFee = prodPrice;
+    let sellerEarnings = 0;
+    const sellerId = product.seller_id || null;
+
+    if (sellerId && sellerId !== req.user.id) {
+      adminFee = Math.round(prodPrice * 0.20 * 100) / 100; // 20%
+      sellerEarnings = Math.round((prodPrice - adminFee) * 100) / 100; // 80%
+      // Credit seller's withdrawable balance
+      await db.run('UPDATE users SET seller_balance = COALESCE(seller_balance, 0) + ? WHERE id = ?', [sellerEarnings, sellerId]);
+    }
+
     // Insert order
     const result = await db.run(`
-      INSERT INTO orders (order_code, user_id, product_id, product_name, price, license_key, server_ip, hwid_resets_left)
-      VALUES (?, ?, ?, ?, ?, ?, '', 3)
-    `, [orderCode, req.user.id, product.id, product.name, prodPrice, licenseKey]);
+      INSERT INTO orders (order_code, user_id, seller_id, product_id, product_name, price, admin_fee, seller_earnings, license_key, server_ip, hwid_resets_left)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', 3)
+    `, [orderCode, req.user.id, sellerId, product.id, product.name, prodPrice, adminFee, sellerEarnings, licenseKey]);
 
     const updatedUser = await db.get('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?', [req.user.id]);
 
@@ -914,6 +942,248 @@ app.post('/api/user/reset-hwid', authenticateToken, async (req, res) => {
       hwid_resets_left: updatedOrder.hwid_resets_left,
       server_ip: updatedOrder.server_ip
     });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ----------------------------------------------------
+// 🛒 CREATOR MARKETPLACE & SELLER WITHDRAWAL APIs
+// ----------------------------------------------------
+
+// Submit Product for Review (Creator ฝากขายสคริปต์)
+app.post('/api/seller/products', authenticateToken, uploadProductCover.single('imageFile'), async (req, res) => {
+  try {
+    const {
+      name, category_slug, price, original_price, samp_version,
+      short_desc, description, features, requirements, code_snippet,
+      image, file_url
+    } = req.body;
+
+    if (!name || !price) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อสคริปต์และราคาให้ครบถ้วน' });
+    }
+
+    const numPrice = Number(price);
+    if (isNaN(numPrice) || numPrice <= 0) {
+      return res.status(400).json({ success: false, message: 'กรุณาระบุราคาที่ถูกต้อง (มากกว่า 0 บาท)' });
+    }
+
+    if (!file_url && !req.file) {
+      return res.status(400).json({ success: false, message: 'กรุณาระบุลิงก์ดาวน์โหลดไฟล์สคริปต์ (เช่น Google Drive, GitHub หรือ MediaFire)' });
+    }
+
+    let finalImage = '/assets/roleplay.jpg';
+    if (req.file) {
+      finalImage = '/uploads/' + req.file.filename;
+    } else if (image) {
+      finalImage = image;
+    }
+
+    const finalCat = category_slug || 'script';
+    const finalSlug = (name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || 'script') + '-' + Date.now().toString(36);
+
+    const result = await db.run(`
+      INSERT INTO products (
+        seller_id, name, slug, category_slug, price, original_price, badge, samp_version,
+        short_desc, description, features, requirements, code_snippet,
+        image, file_url, is_featured, status
+      ) VALUES (?, ?, ?, ?, ?, ?, 'CREATOR', ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending')
+    `, [
+      req.user.id,
+      name,
+      finalSlug,
+      finalCat,
+      numPrice,
+      original_price ? Number(original_price) : null,
+      samp_version || '0.3.7-R2',
+      short_desc || '',
+      description || '',
+      typeof features === 'string' ? features : JSON.stringify(features || []),
+      typeof requirements === 'string' ? requirements : JSON.stringify(requirements || []),
+      code_snippet || '',
+      finalImage,
+      file_url || 'https://github.com/samp-releases/demo-package.zip'
+    ]);
+
+    res.json({
+      success: true,
+      message: 'ส่งสคริปต์เข้าสู่ระบบฝากขายเรียบร้อยแล้ว! แอดมินจะทำการตรวจสอบความปลอดภัยก่อนอนุมัติขึ้นหน้าร้าน',
+      id: result.lastInsertRowid
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Get Seller Dashboard & Earnings
+app.get('/api/seller/dashboard', authenticateToken, async (req, res) => {
+  try {
+    const user = await db.get('SELECT balance, COALESCE(seller_balance, 0) as seller_balance FROM users WHERE id = ?', [req.user.id]);
+    const sellerBalance = Number(user?.seller_balance || 0);
+
+    const salesStats = await db.get(`
+      SELECT COUNT(*) as total_orders, COALESCE(SUM(seller_earnings), 0) as total_earned
+      FROM orders
+      WHERE seller_id = ?
+    `, [req.user.id]);
+
+    const myProducts = await db.all('SELECT * FROM products WHERE seller_id = ? ORDER BY id DESC', [req.user.id]);
+    const withdrawals = await db.all('SELECT * FROM withdrawals WHERE user_id = ? ORDER BY id DESC LIMIT 20', [req.user.id]);
+
+    res.json({
+      success: true,
+      seller: {
+        sellerBalance,
+        totalOrders: Number(salesStats?.total_orders || 0),
+        totalEarned: Number(salesStats?.total_earned || 0),
+        productsCount: myProducts.length,
+        myProducts,
+        withdrawals
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Request Withdrawal (แจ้งถอนเงินพ้อยรายได้)
+app.post('/api/seller/withdraw', authenticateToken, async (req, res) => {
+  try {
+    const { amount, bank_name, account_number, account_name } = req.body;
+    const numAmount = Number(amount);
+
+    if (!numAmount || numAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'กรุณาระบุจำนวนเงินที่ต้องการถอนให้ถูกต้อง' });
+    }
+
+    if (!bank_name || !account_number || !account_name) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลธนาคาร/พร้อมเพย์ เลขบัญชี และชื่อบัญชีให้ครบถ้วน' });
+    }
+
+    if (numAmount < 50) {
+      return res.status(400).json({ success: false, message: 'ยอดถอนขั้นต่ำคือ 50 บาท' });
+    }
+
+    const user = await db.get('SELECT COALESCE(seller_balance, 0) as seller_balance FROM users WHERE id = ?', [req.user.id]);
+    const currentSellerBalance = Number(user?.seller_balance || 0);
+
+    if (currentSellerBalance < numAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `ยอดเงินที่ถอนได้ไม่เพียงพอ (คุณมี ฿${currentSellerBalance.toLocaleString()} บาท ต้องการถอน ฿${numAmount.toLocaleString()} บาท)`
+      });
+    }
+
+    // Deduct seller balance
+    await db.run('UPDATE users SET seller_balance = seller_balance - ? WHERE id = ?', [numAmount, req.user.id]);
+
+    // Record withdrawal request
+    const result = await db.run(`
+      INSERT INTO withdrawals (user_id, amount, bank_name, account_number, account_name, status)
+      VALUES (?, ?, ?, ?, ?, 'pending')
+    `, [req.user.id, numAmount, bank_name.trim(), account_number.trim(), account_name.trim()]);
+
+    const updatedUser = await db.get('SELECT COALESCE(seller_balance, 0) as seller_balance FROM users WHERE id = ?', [req.user.id]);
+
+    res.json({
+      success: true,
+      message: `ส่งคำขอถอนเงิน ฿${numAmount.toLocaleString()} เรียบร้อยแล้ว! แอดมินจะตรวจสอบและโอนเงินเข้าบัญชีของคุณโดยเร็วที่สุด`,
+      withdrawalId: result.lastInsertRowid,
+      newSellerBalance: Number(updatedUser.seller_balance || 0)
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Admin: Get Pending Products for Review
+app.get('/api/admin/marketplace/pending', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const products = await db.all(`
+      SELECT p.*, u.username as seller_name, u.email as seller_email
+      FROM products p
+      LEFT JOIN users u ON p.seller_id = u.id
+      WHERE p.status = 'pending'
+      ORDER BY p.id ASC
+    `);
+    res.json({ success: true, products });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Admin: Review Product (Approve or Reject)
+app.post('/api/admin/marketplace/review/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { action, reject_reason } = req.body;
+    const productId = req.params.id;
+
+    const product = await db.get('SELECT * FROM products WHERE id = ?', [productId]);
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'ไม่พบสคริปต์ที่ระบุ' });
+    }
+
+    if (action === 'approve') {
+      await db.run("UPDATE products SET status = 'approved', reject_reason = '' WHERE id = ?", [productId]);
+      res.json({ success: true, message: `อนุมัติสคริปต์ "${product.name}" ขึ้นวางจำหน่ายหน้าร้านเรียบร้อยแล้ว!` });
+    } else {
+      const reason = reject_reason || 'ไม่ผ่านเกณฑ์การตรวจสอบความปลอดภัยของทีมงาน';
+      await db.run("UPDATE products SET status = 'rejected', reject_reason = ? WHERE id = ?", [reason, productId]);
+      res.json({ success: true, message: `ปฏิเสธสคริปต์ "${product.name}" เรียบร้อยแล้ว (เหตุผล: ${reason})` });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Admin: Get all withdrawal requests
+app.get('/api/admin/withdrawals', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const withdrawals = await db.all(`
+      SELECT w.*, u.username, u.email
+      FROM withdrawals w
+      JOIN users u ON w.user_id = u.id
+      ORDER BY CASE WHEN w.status = 'pending' THEN 0 ELSE 1 END, w.id DESC
+    `);
+    res.json({ success: true, withdrawals });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Admin: Action on Withdrawal (Complete payout or Reject with refund)
+app.post('/api/admin/withdrawals/:id/action', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { action, admin_note } = req.body;
+    const withdrawalId = req.params.id;
+
+    const withdrawal = await db.get('SELECT * FROM withdrawals WHERE id = ?', [withdrawalId]);
+    if (!withdrawal) {
+      return res.status(404).json({ success: false, message: 'ไม่พบรายการคำขอถอนเงิน' });
+    }
+
+    if (withdrawal.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'รายการนี้ได้รับการดำเนินการไปแล้ว' });
+    }
+
+    if (action === 'complete') {
+      await db.run(`
+        UPDATE withdrawals
+        SET status = 'completed', admin_note = ?, completed_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [admin_note || 'โอนเงินเรียบร้อยแล้ว', withdrawalId]);
+      res.json({ success: true, message: `ยืนยันการโอนเงินจำนวน ฿${Number(withdrawal.amount).toLocaleString()} ให้คุณ ${withdrawal.account_name} เรียบร้อยแล้ว!` });
+    } else {
+      // Refund money back to user's seller_balance
+      await db.run('UPDATE users SET seller_balance = COALESCE(seller_balance, 0) + ? WHERE id = ?', [withdrawal.amount, withdrawal.user_id]);
+      await db.run(`
+        UPDATE withdrawals
+        SET status = 'rejected', admin_note = ?, completed_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [admin_note || 'ข้อมูลบัญชีไม่ถูกต้อง หรือไม่สามารถโอนได้ (คืนเงินเข้ากระเป๋าเรียบร้อย)', withdrawalId]);
+      res.json({ success: true, message: `ปฏิเสธคำขอและคืนเงิน ฿${Number(withdrawal.amount).toLocaleString()} เข้ากระเป๋าผู้ขายเรียบร้อยแล้ว` });
+    }
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

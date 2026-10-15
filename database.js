@@ -99,6 +99,7 @@ async function initDatabase() {
       password_hash TEXT NOT NULL,
       role TEXT DEFAULT 'user',
       balance REAL DEFAULT 0.00,
+      seller_balance REAL DEFAULT 0.00,
       avatar TEXT DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -113,6 +114,7 @@ async function initDatabase() {
 
     CREATE TABLE IF NOT EXISTS products (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      seller_id INTEGER DEFAULT NULL,
       name TEXT NOT NULL,
       slug TEXT UNIQUE NOT NULL,
       category_slug TEXT NOT NULL,
@@ -131,6 +133,8 @@ async function initDatabase() {
       stock INTEGER DEFAULT 999,
       rating REAL DEFAULT 5.0,
       is_featured INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'approved',
+      reject_reason TEXT DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -138,15 +142,32 @@ async function initDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_code TEXT UNIQUE NOT NULL,
       user_id INTEGER NOT NULL,
+      seller_id INTEGER DEFAULT NULL,
       product_id INTEGER NOT NULL,
       product_name TEXT NOT NULL,
       price REAL NOT NULL,
+      admin_fee REAL DEFAULT 0.00,
+      seller_earnings REAL DEFAULT 0.00,
       license_key TEXT NOT NULL,
       server_ip TEXT DEFAULT '',
       hwid_resets_left INTEGER DEFAULT 3,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
       FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS withdrawals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      bank_name TEXT NOT NULL,
+      account_number TEXT NOT NULL,
+      account_name TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      admin_note TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS topups (

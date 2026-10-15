@@ -56,6 +56,13 @@
           </svg>
           สคริปต์ของฉัน
         </a>
+        <a class="nav-link" href="#creator" data-view="creator" id="navCreatorLink">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+          </svg>
+          ฝากขายสคริปต์
+        </a>
         <!-- Admin Link (Displayed dynamically if user is Admin) -->
         <a class="nav-link admin-nav-pill" href="#admin" data-view="admin" id="navAdminLink" style="display: none;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -244,6 +251,239 @@
     </section>
 
     <!-- ====================================================
+         VIEW: CREATOR MARKETPLACE & SELLER WITHDRAWAL HUB
+         ==================================================== -->
+    <section class="app-view" id="view-creator" style="display: none;">
+      <div class="container" style="padding-top: 2rem; padding-bottom: 3.5rem;">
+        
+        <!-- Creator Header -->
+        <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(16, 185, 129, 0.1)); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: var(--radius-md); padding: 1.75rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+              <span style="font-size: 1.5rem;">💼</span>
+              <h2 style="font-size: 1.45rem; font-weight: 800; color: #fff; margin: 0;">ระบบฝากขายสคริปต์ (Creator Hub)</h2>
+              <span style="background: rgba(16, 185, 129, 0.2); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 999px;">
+                ส่วนแบ่งผู้สร้าง 80% • แอดมิน 20%
+              </span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.88rem; margin: 0; max-width: 600px;">
+              นำผลงานสคริปต์ SA-MP หรือ Gamemode ของคุณมาวางขายบน Nexus SAMP Store ได้ทันที สร้างรายได้จริง ถอนเงินสดเข้าบัญชีธนาคารได้ตลอดเวลา
+            </p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="switchCreatorTab('submit')">➕ ส่งสคริปต์ฝากขาย</button>
+            <button class="btn btn-secondary" onclick="switchCreatorTab('withdraw')">💸 ถอนเงินรายได้</button>
+          </div>
+        </div>
+
+        <!-- Creator Stat Cards -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 1.25rem;">
+            <div style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase;">💰 ยอดเงินที่ถอนได้ (Seller Balance)</div>
+            <div style="font-size: 1.8rem; font-weight: 900; font-family: var(--font-mono); color: var(--accent-emerald); margin-top: 0.35rem;" id="creatorSellerBalance">฿0.00</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 1.25rem;">
+            <div style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase;">📈 รายได้สะสมทั้งหมด (80% Share)</div>
+            <div style="font-size: 1.8rem; font-weight: 900; font-family: var(--font-mono); color: var(--accent-cyan); margin-top: 0.35rem;" id="creatorTotalEarned">฿0.00</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 1.25rem;">
+            <div style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase;">📦 จำนวนออเดอร์ที่ขายได้</div>
+            <div style="font-size: 1.8rem; font-weight: 900; font-family: var(--font-mono); color: #fff; margin-top: 0.35rem;" id="creatorTotalOrders">0 ชิ้น</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 1.25rem;">
+            <div style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase;">🎮 สคริปต์ที่ลงขาย</div>
+            <div style="font-size: 1.8rem; font-weight: 900; font-family: var(--font-mono); color: var(--accent-amber); margin-top: 0.35rem;" id="creatorProductsCount">0 รายการ</div>
+          </div>
+        </div>
+
+        <!-- Creator Tabs Navigation -->
+        <div style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-medium); margin-bottom: 1.5rem;">
+          <button class="topup-toggle-btn active" id="tabCreatorMyScripts" onclick="switchCreatorTab('my-scripts')">
+            📦 สคริปต์ของฉันที่ฝากขาย
+          </button>
+          <button class="topup-toggle-btn" id="tabCreatorSubmit" onclick="switchCreatorTab('submit')">
+            ➕ ส่งสคริปต์ฝากขายใหม่
+          </button>
+          <button class="topup-toggle-btn" id="tabCreatorWithdraw" onclick="switchCreatorTab('withdraw')">
+            💸 กระเป๋ารายได้ & แจ้งถอนเงิน
+          </button>
+        </div>
+
+        <!-- Tab 1: My Submitted Scripts -->
+        <div id="creatorTabMyScriptsContent">
+          <div style="overflow-x: auto;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th style="width: 60px;">ID</th>
+                  <th>สคริปต์</th>
+                  <th>ราคา (บาท)</th>
+                  <th>ส่วนแบ่งผู้ขาย (80%)</th>
+                  <th>ยอดขาย</th>
+                  <th>สถานะการตรวจสอบ</th>
+                </tr>
+              </thead>
+              <tbody id="creatorMyScriptsTbody">
+                <!-- Rendered by app.js -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: Submit New Script Form -->
+        <div id="creatorTabSubmitContent" style="display: none;">
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.75rem; max-width: 800px; margin: 0 auto;">
+            <div style="background: rgba(245, 158, 11, 0.1); border-left: 4px solid var(--accent-amber); padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;">
+              <h4 style="color: var(--accent-amber); margin: 0 0 0.25rem; font-size: 0.95rem;">⚠️ กฎระเบียบและเงื่อนไขการฝากขาย</h4>
+              <p style="color: var(--text-dim); font-size: 0.83rem; margin: 0; line-height: 1.5;">
+                1. ทุกสคริปต์จะต้องผ่านการตรวจสอบไฟล์จากแอดมินก่อนขึ้นหน้าร้าน เพื่อป้องกันไวรัส โทรจัน หรือการส่งไฟล์มาป่วน<br>
+                2. เมื่อมีลูกค้าซื้อสคริปต์ของคุณ <b>รายได้ 80% จะเข้ากระเป๋าของคุณทันที</b> (หักค่าธรรมเนียมแพลตฟอร์ม 20%)<br>
+                3. คุณสามารถกดแจ้งถอนเงินสดเข้าบัญชีธนาคารหรือพร้อมเพย์ได้เมื่อมียอดเงินตั้งแต่ 50 บาทขึ้นไป
+              </p>
+            </div>
+
+            <form id="formSubmitCreatorProduct">
+              <div class="form-group">
+                <label class="form-label">ชื่อสคริปต์ / ระบบ *</label>
+                <input type="text" class="form-control" id="creatorProdName" placeholder="เช่น ระบบประมูลรถ V2, Gamemode Gangwar 2026" required>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                  <label class="form-label">หมวดหมู่ *</label>
+                  <select class="form-control" id="creatorProdCategory" required>
+                    <option value="gamemode">โหมดเกมเต็มระบบ (Gamemodes)</option>
+                    <option value="inventory-ui">กระเป๋า & UI Textdraw</option>
+                    <option value="turf-gang">ระบบแก๊งค์ & ยึดจุด (Turf)</option>
+                    <option value="anticheat-launcher">ระบบกันแฮก & Launcher</option>
+                    <option value="jobs-system">ระบบงาน & เศรษฐกิจ (Jobs)</option>
+                    <option value="housing-biz">ระบบบ้าน & ธุรกิจ (Housing)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">ราคาขาย (บาท) *</label>
+                  <input type="number" class="form-control" id="creatorProdPrice" placeholder="เช่น 250" min="10" required>
+                  <small style="color: var(--accent-emerald); font-size: 0.78rem;" id="creatorFeePreview">
+                    คุณจะได้รับ 80% = ฿0 บาท / การขาย 1 ครั้ง
+                  </small>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">ลิงก์ดาวน์โหลดไฟล์สคริปต์ (ZIP / RAR) *</label>
+                <input type="url" class="form-control" id="creatorProdFileUrl" placeholder="เช่น https://drive.google.com/... หรือ MediaFire" required>
+                <small style="color: var(--text-dim); font-size: 0.78rem;">
+                  🔒 แอดมินจะดาวน์โหลดไปตรวจสอบความปลอดภัยก่อนอนุมัติ และผู้ซื้อจะได้รับลิงก์นี้อัตโนมัติ
+                </small>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">เวอร์ชัน SA-MP ที่รองรับ</label>
+                <input type="text" class="form-control" id="creatorProdSampVer" value="0.3.7-R2 / open.mp" placeholder="เช่น 0.3.7-R2">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">คำอธิบายสั้น (แสดงบนการ์ดสินค้า) *</label>
+                <input type="text" class="form-control" id="creatorProdShortDesc" placeholder="สรุปจุดเด่นสั้นๆ 1-2 ประโยค" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">รายละเอียดระบบเต็มรูปแบบ</label>
+                <textarea class="form-control" id="creatorProdDesc" rows="4" placeholder="อธิบายฟังก์ชัน คำสั่งการใช้งาน และสิ่งที่จะได้รับ"></textarea>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">รูปภาพหน้าปกสคริปต์ (อัปโหลดรูป JPG/PNG)</label>
+                <input type="file" class="form-control" id="creatorProdImageFile" accept="image/jpeg,image/png,image/webp">
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 1rem;">
+                🚀 ยืนยันและส่งสคริปต์ให้แอดมินตรวจสอบ
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Tab 3: Withdrawal / Payout Request -->
+        <div id="creatorTabWithdrawContent" style="display: none;">
+          <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 2rem; align-items: start;">
+            <!-- Withdrawal Form -->
+            <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.75rem;">
+              <h3 style="color: #fff; font-size: 1.15rem; margin-top: 0; margin-bottom: 0.5rem;">💸 แจ้งถอนเงินสดเข้าบัญชี</h3>
+              <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem;">
+                ยอดถอนขั้นต่ำ 50 บาท แอดมินจะดำเนินการโอนเงินให้ภายใน 24 ชม.
+              </p>
+
+              <form id="formRequestWithdrawal">
+                <div class="form-group">
+                  <label class="form-label">จำนวนเงินที่ต้องการถอน (บาท) *</label>
+                  <input type="number" class="form-control" id="withdrawAmount" placeholder="เช่น 500" min="50" required>
+                  <small style="color: var(--text-dim); font-size: 0.78rem;">
+                    ยอดเงินที่ถอนได้ของคุณปัจจุบัน: <b style="color: var(--accent-emerald);" id="withdrawAvailable">฿0.00</b>
+                  </small>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">ธนาคาร / พร้อมเพย์ *</label>
+                  <select class="form-control" id="withdrawBank" required>
+                    <option value="พร้อมเพย์ (PromptPay)">พร้อมเพย์ (PromptPay)</option>
+                    <option value="ธนาคารไทยพาณิชย์ (SCB)">ธนาคารไทยพาณิชย์ (SCB)</option>
+                    <option value="ธนาคารกสิกรไทย (KBANK)">ธนาคารกสิกรไทย (KBANK)</option>
+                    <option value="ธนาคารกรุงเทพ (BBL)">ธนาคารกรุงเทพ (BBL)</option>
+                    <option value="ธนาคารกรุงไทย (KTB)">ธนาคารกรุงไทย (KTB)</option>
+                    <option value="ธนาคารทหารไทยธนชาต (TTB)">ธนาคารทหารไทยธนชาต (TTB)</option>
+                    <option value="ธนาคารออมสิน (GSB)">ธนาคารออมสิน (GSB)</option>
+                    <option value="TrueMoney Wallet">TrueMoney Wallet</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">เลขที่บัญชี / เบอร์พร้อมเพย์ *</label>
+                  <input type="text" class="form-control" id="withdrawAccountNumber" placeholder="เช่น 0812345678 หรือ 123-4-56789-0" required>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">ชื่อบัญชี (ตรงกับหน้าสมุดบัญชี) *</label>
+                  <input type="text" class="form-control" id="withdrawAccountName" placeholder="เช่น นายสมชาย ใจดี" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 0.5rem;">
+                  ยืนยันการแจ้งถอนเงิน
+                </button>
+              </form>
+            </div>
+
+            <!-- Withdrawal History -->
+            <div>
+              <h3 style="color: #fff; font-size: 1.15rem; margin-top: 0; margin-bottom: 0.5rem;">📋 ประวัติการแจ้งถอนเงิน</h3>
+              <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem;">
+                ติดตามสถานะการโอนเงินจากแอดมิน
+              </p>
+              
+              <div style="overflow-x: auto;">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>วันที่</th>
+                      <th>ยอดถอน</th>
+                      <th>ธนาคาร/เลขบัญชี</th>
+                      <th>สถานะ</th>
+                      <th>หมายเหตุ</th>
+                    </tr>
+                  </thead>
+                  <tbody id="creatorWithdrawalsTbody">
+                    <!-- Rendered by app.js -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ====================================================
          VIEW: ADMIN MANAGEMENT PANEL (NEW!)
          ==================================================== -->
     <section class="app-view" id="view-admin" style="display: none;">
@@ -304,6 +544,70 @@
             </div>
             <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">บันทึกการตั้งค่า SlipOK</button>
           </form>
+        <!-- 📦 Creator Marketplace Pending Scripts for Review -->
+        <div style="background: var(--bg-surface); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--radius-md); padding: 1.5rem; margin-top: 2rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <h3 style="color: #fff; font-size: 1.15rem; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                <span>📦</span> สคริปต์จากสมาชิกที่รอตรวจสอบ (Marketplace Pending Approval)
+                <span id="badgePendingCount" style="background: var(--accent-amber); color: #000; font-size: 0.72rem; font-weight: 800; padding: 0.15rem 0.5rem; border-radius: 999px;">0</span>
+              </h3>
+              <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; margin-bottom: 0;">
+                ตรวจสอบไฟล์สคริปต์เพื่อป้องกันไวรัส โทรจัน หรือการส่งไฟล์มาป่วน ก่อนอนุมัติให้วางขายบนหน้าร้าน
+              </p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadAdminMarketplacePending()">🔄 รีเฟรชรายการรอตรวจ</button>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>ผู้ส่งขาย</th>
+                  <th>ชื่อสคริปต์</th>
+                  <th>ราคา</th>
+                  <th>ลิงก์ตรวจสอบไฟล์</th>
+                  <th style="text-align: right; width: 180px;">การดำเนินการ</th>
+                </tr>
+              </thead>
+              <tbody id="adminPendingProductsTbody">
+                <tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">ไม่มีสคริปต์รอตรวจสอบในขณะนี้</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 💸 Creator Withdrawal Requests Management -->
+        <div style="background: var(--bg-surface); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: var(--radius-md); padding: 1.5rem; margin-top: 2rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <h3 style="color: #fff; font-size: 1.15rem; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                <span>💸</span> รายการคำขอถอนเงินของสมาชิก (Withdrawal Requests)
+                <span id="badgeWithdrawalCount" style="background: var(--accent-emerald); color: #000; font-size: 0.72rem; font-weight: 800; padding: 0.15rem 0.5rem; border-radius: 999px;">0</span>
+              </h3>
+              <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; margin-bottom: 0;">
+                โอนเงินเข้าบัญชีธนาคาร/พร้อมเพย์ของผู้ขาย แล้วกดยืนยันการโอน
+              </p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadAdminWithdrawals()">🔄 รีเฟรชคำขอถอน</button>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>ผู้ขอถอน</th>
+                  <th>ยอดเงิน (บาท)</th>
+                  <th>ธนาคาร</th>
+                  <th>เลขบัญชี</th>
+                  <th>ชื่อบัญชี</th>
+                  <th>สถานะ</th>
+                  <th style="text-align: right; width: 200px;">การดำเนินการ</th>
+                </tr>
+              </thead>
+              <tbody id="adminWithdrawalsTbody">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">ไม่มีคำขอถอนเงินที่รอดำเนินการ</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <!-- 🛡️ Nexus Shield Live Security Monitoring Panel (ระดับเต็มกราฟ) -->

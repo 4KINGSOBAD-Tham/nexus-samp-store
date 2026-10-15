@@ -1,0 +1,1080 @@
+/**
+ * Nexus SAMP Store - Frontend Application
+ * Clean, modern e-commerce logic with full Admin Script Management (Add & Delete)
+ */
+
+const state = {
+  user: null,
+  token: localStorage.getItem('samp_token') || null,
+  products: [],
+  categories: [],
+  currentCategory: 'all',
+  searchQuery: '',
+  sortBy: 'latest'
+};
+
+// API Helper
+async function api(endpoint, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  if (state.token) {
+    headers['Authorization'] = `Bearer ${state.token}`;
+  }
+
+  try {
+    const res = await fetch(endpoint, { ...options, headers });
+    return await res.json();
+  } catch (err) {
+    console.error('API Error:', err);
+    return { success: false, message: 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้' };
+  }
+}
+
+// Toast Notifications
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `
+    <span>${type === 'success' ? '✅' : '⚠️'}</span>
+    <div>${message}</div>
+  `;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-10px)';
+    toast.style.transition = 'all 0.25s ease';
+    setTimeout(() => toast.remove(), 250);
+  }, 3000);
+}
+
+// View Navigation Switcher
+function switchView(viewName) {
+  if (viewName === 'home') viewName = 'store';
+
+  document.querySelectorAll('.app-view').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+
+  const targetView = document.getElementById(`view-${viewName}`);
+  if (targetView) {
+    targetView.style.display = 'block';
+  }
+
+  const activeLink = document.querySelector(`.nav-link[data-view="${viewName}"]`);
+  if (activeLink) {
+    activeLink.classList.add('active');
+  }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (viewName === 'orders') {
+    loadUserOrders();
+  } else if (viewName === 'topup') {
+    loadTopupHistory();
+  } else if (viewName === 'admin') {
+    loadAdminProducts();
+  }
+}
+
+// App Initialization
+document.addEventListener('DOMContentLoaded', async () => {
+  setupNavigation();
+  setupModals();
+  setupTopup();
+  setupAdminForm();
+
+  await checkAuth();
+  await loadCategories();
+  await loadProducts();
+
+  const hash = window.location.hash.replace('#', '') || 'store';
+  switchView(hash);
+});
+
+// Setup Navigation Events
+function setupNavigation() {
+  document.querySelectorAll('[data-view]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const view = btn.getAttribute('data-view');
+      window.location.hash = view;
+      switchView(view);
+    });
+  });
+}
+
+// ----------------------------------------------------
+// Authentication System
+// ----------------------------------------------------
+async function checkAuth() {
+  if (!state.token) {
+    renderUserNav();
+    return;
+  }
+
+  const res = await api('/api/auth/me');
+  if (res.success && res.user) {
+    state.user = res.user;
+    renderUserNav();
+  } else {
+    state.token = null;
+    state.user = null;
+    localStorage.removeItem('samp_token');
+    renderUserNav();
+  }
+}
+
+function renderUserNav() {
+  const navAuth = document.getElementById('navAuth');
+  const adminLink = document.getElementById('navAdminLink');
+  if (!navAuth) return;
+
+  // Show/Hide Admin Nav Button
+  if (state.user && state.user.role === 'admin') {
+    if (adminLink) adminLink.style.display = 'flex';
+  } else {
+    if (adminLink) adminLink.style.display = 'none';
+  }
+
+  if (state.user) {
+    navAuth.innerHTML = `
+      <div class="user-badge" id="userMenuToggle">
+        <div class="user-avatar-circle">${state.user.role === 'admin' ? '👑' : '👤'}</div>
+        <div>
+          <div class="user-name">${state.user.username}</div>
+          <div class="user-balance-pill">฿ ${Number(state.user.balance).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</div>
+        </div>
+        <div class="user-dropdown" id="userDropdown">
+          <a class="dropdown-item" href="#topup" data-view="topup">💳 เติมเงิน</a>
+          <a class="dropdown-item" href="#orders" data-view="orders">📦 สคริปต์ของฉัน</a>
+          ${state.user.role === 'admin' ? `
+            <a class="dropdown-item" href="#admin" data-view="admin" style="color: var(--accent-rose); font-weight: 600;">
+              👑 จัดการสคริปต์ (Admin)
+            </a>
+          ` : ''}
+          <div style="height: 1px; background: var(--border-subtle); margin: 3px 0;"></div>
+          <a class="dropdown-item" href="#" id="logoutBtn" style="color: var(--accent-rose);">🚪 ออกจากระบบ</a>
+        </div>
+      </div>
+    `;
+
+    const toggle = document.getElementById('userMenuToggle');
+    const dropdown = document.getElementById('userDropdown');
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.style.display = dropdown.style.display === 'flex' ? 'none' : 'flex';
+    });
+
+    document.addEventListener('click', () => {
+      if (dropdown) dropdown.style.display = 'none';
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+    });
+
+    navAuth.querySelectorAll('[data-view]').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const v = link.getAttribute('data-view');
+        window.location.hash = v;
+        switchView(v);
+      });
+    });
+
+  } else {
+    navAuth.innerHTML = `
+      <button class="btn btn-secondary btn-sm" onclick="openAuthModal('register')">สมัครสมาชิก</button>
+      <button class="btn btn-primary btn-sm" onclick="openAuthModal('login')">เข้าสู่ระบบ</button>
+    `;
+  }
+}
+
+function logout() {
+  state.token = null;
+  state.user = null;
+  localStorage.removeItem('samp_token');
+  renderUserNav();
+  showToast('ออกจากระบบเรียบร้อยแล้ว');
+  switchView('store');
+}
+
+// Auth Forms
+function setupModals() {
+  document.querySelectorAll('.modal-overlay').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal(modal.id);
+    });
+  });
+
+  const authTabLogin = document.getElementById('authTabLogin');
+  const authTabRegister = document.getElementById('authTabRegister');
+  const formLogin = document.getElementById('formLogin');
+  const formRegister = document.getElementById('formRegister');
+
+  if (authTabLogin && authTabRegister) {
+    authTabLogin.addEventListener('click', () => {
+      formLogin.style.display = 'block';
+      formRegister.style.display = 'none';
+      authTabLogin.classList.remove('btn-secondary');
+      authTabLogin.classList.add('btn-primary');
+      authTabRegister.classList.remove('btn-primary');
+      authTabRegister.classList.add('btn-secondary');
+    });
+
+    authTabRegister.addEventListener('click', () => {
+      formLogin.style.display = 'none';
+      formRegister.style.display = 'block';
+      authTabRegister.classList.remove('btn-secondary');
+      authTabRegister.classList.add('btn-primary');
+      authTabLogin.classList.remove('btn-primary');
+      authTabLogin.classList.add('btn-secondary');
+    });
+  }
+
+  // Handle Login
+  if (formLogin) {
+    formLogin.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('loginUsername').value;
+      const password = document.getElementById('loginPassword').value;
+
+      const res = await api('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password })
+      });
+
+      if (res.success) {
+        state.token = res.token;
+        state.user = res.user;
+        localStorage.setItem('samp_token', res.token);
+        renderUserNav();
+        closeModal('authModal');
+        showToast(`เข้าสู่ระบบสำเร็จ ยินดีต้อนรับคุณ ${res.user.username}`);
+      } else {
+        showToast(res.message, 'error');
+      }
+    });
+  }
+
+  // Handle Register
+  if (formRegister) {
+    formRegister.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('regUsername').value;
+      const email = document.getElementById('regEmail').value;
+      const password = document.getElementById('regPassword').value;
+
+      const res = await api('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password })
+      });
+
+      if (res.success) {
+        state.token = res.token;
+        state.user = res.user;
+        localStorage.setItem('samp_token', res.token);
+        renderUserNav();
+        closeModal('authModal');
+        showToast(res.message);
+      } else {
+        showToast(res.message, 'error');
+      }
+    });
+  }
+}
+
+function openModal(id) {
+  const modal = document.getElementById(id);
+  if (modal) {
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeModal(id) {
+  const modal = document.getElementById(id);
+  if (modal) {
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+}
+
+function openAuthModal(mode = 'login') {
+  openModal('authModal');
+  if (mode === 'register') {
+    document.getElementById('authTabRegister').click();
+  } else {
+    document.getElementById('authTabLogin').click();
+  }
+}
+
+// ----------------------------------------------------
+// Store & Products System
+// ----------------------------------------------------
+async function loadCategories() {
+  const res = await api('/api/categories');
+  if (res.success) {
+    state.categories = res.categories;
+    renderCategories();
+  }
+}
+
+function renderCategories() {
+  const container = document.getElementById('homeCategories');
+  if (!container) return;
+
+  let html = `
+    <button class="cat-btn ${state.currentCategory === 'all' ? 'active' : ''}" onclick="filterCategory('all')">
+      ทั้งหมด (${state.products.length})
+    </button>
+  `;
+
+  state.categories.forEach(cat => {
+    html += `
+      <button class="cat-btn ${state.currentCategory === cat.slug ? 'active' : ''}" onclick="filterCategory('${cat.slug}')">
+        ${cat.name.split(' ')[0]} (${cat.product_count})
+      </button>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+function filterCategory(slug) {
+  state.currentCategory = slug;
+  renderCategories();
+  loadProducts();
+}
+
+async function loadProducts() {
+  let url = `/api/products?category=${state.currentCategory}&sort=${state.sortBy}`;
+  if (state.searchQuery) {
+    url += `&search=${encodeURIComponent(state.searchQuery)}`;
+  }
+
+  const res = await api(url);
+  if (res.success) {
+    state.products = res.products;
+    renderProducts();
+
+    const countStat = document.getElementById('statProdCount');
+    if (countStat) countStat.textContent = state.products.length;
+  }
+}
+
+function renderProducts() {
+  const grid = document.getElementById('storeProductsGrid');
+  if (!grid) return;
+
+  if (state.products.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column: 1/-1; text-align: center; padding: 4rem 1rem; color: var(--text-dim);">
+        <h3 style="color: var(--text-muted); margin-bottom: 0.5rem;">ไม่พบสคริปต์ที่ค้นหา</h3>
+        <p>ลองค้นหาด้วยคำอื่น หรือกดดูทุกหมวดหมู่</p>
+        <button class="btn btn-secondary btn-sm" style="margin-top: 1rem;" onclick="filterCategory('all')">แสดงสคริปต์ทั้งหมด</button>
+      </div>
+    `;
+    return;
+  }
+
+  grid.innerHTML = state.products.map(p => `
+    <div class="product-card">
+      <div class="product-card-thumb-wrap">
+        <img class="product-card-thumb" src="${p.image || '/assets/roleplay.jpg'}" alt="${p.name}" loading="lazy">
+        <div class="product-badge-pill">${p.samp_version || '0.3.7'}</div>
+      </div>
+      <div class="product-card-body">
+        <div class="product-card-cat">${p.category_slug}</div>
+        <h3 class="product-card-title">${p.name}</h3>
+        <p class="product-card-desc">${p.short_desc || ''}</p>
+        <div class="product-card-footer">
+          <div class="product-price-box">
+            <strong>฿${p.price.toLocaleString()}</strong>
+            <small>THB</small>
+          </div>
+          <div class="product-card-btns">
+            <button class="btn btn-secondary btn-sm" onclick="viewProductDetail(${p.id})">รายละเอียด</button>
+            <button class="btn btn-primary btn-sm" onclick="quickBuyProduct(${p.id})">ซื้อทันที</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ----------------------------------------------------
+// Product Detail Modal
+// ----------------------------------------------------
+async function viewProductDetail(productId) {
+  const res = await api(`/api/products/${productId}`);
+  if (!res.success || !res.product) {
+    showToast('ไม่สามารถโหลดข้อมูลสคริปต์ได้', 'error');
+    return;
+  }
+
+  const p = res.product;
+  const modalBody = document.getElementById('productDetailBody');
+  if (!modalBody) return;
+
+  modalBody.innerHTML = `
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.25rem;">
+      <div>
+        <img src="${p.image}" style="width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border-medium);" alt="${p.name}">
+        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; font-size: 0.8rem; color: var(--text-dim);">
+          <span>SA-MP: <b style="color: var(--accent-cyan);">${p.samp_version}</b></span> • 
+          <span>ยอดขาย: <b style="color: #fff;">${p.sold_count} ชิ้น</b></span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600;">${p.category_slug}</div>
+        <h2 style="font-size: 1.35rem; margin: 0.25rem 0 0.5rem; color: #fff;">${p.name}</h2>
+        <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1.25rem; line-height: 1.5;">${p.description || p.short_desc}</p>
+        
+        <div style="font-size: 1.8rem; font-family: var(--font-mono); color: #fff; margin-bottom: 1rem;">
+          ฿${p.price.toLocaleString()} <span style="font-size: 0.85rem; color: var(--text-dim);">THB</span>
+        </div>
+
+        <button class="btn btn-primary btn-lg" style="width: 100%;" onclick="quickBuyProduct(${p.id})">
+          สั่งซื้อระบบนี้ทันที (รับไฟล์อัตโนมัติ)
+        </button>
+      </div>
+    </div>
+
+    <div>
+      <h4 style="color: #fff; font-size: 0.95rem; margin-bottom: 0.5rem;">คุณสมบัติของระบบ (Features)</h4>
+      <ul style="margin-left: 1.25rem; color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1.25rem;">
+        ${(p.features || []).map(f => `<li style="margin-bottom: 0.35rem;">${f}</li>`).join('')}
+      </ul>
+
+      ${p.code_snippet ? `
+        <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.35rem;">ตัวอย่างโค้ด / Code Preview</div>
+        <pre class="code-box"><code>${escapeHtml(p.code_snippet)}</code></pre>
+      ` : ''}
+    </div>
+  `;
+
+  openModal('productDetailModal');
+}
+
+function escapeHtml(text) {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// ----------------------------------------------------
+// Instant Checkout & Purchase
+// ----------------------------------------------------
+async function quickBuyProduct(productId) {
+  if (!state.user) {
+    showToast('กรุณาเข้าสู่ระบบก่อนสั่งซื้อสินค้า', 'error');
+    openAuthModal('login');
+    return;
+  }
+
+  const p = state.products.find(item => item.id === productId);
+  if (!p) return;
+
+  if (state.user.balance < p.price) {
+    const diff = p.price - state.user.balance;
+    if (confirm(`ยอดเงินคงเหลือไม่พอ (ขาดอีก ฿${diff.toLocaleString()})\nต้องการไปยังหน้าเติมเงินหรือไม่?`)) {
+      window.location.hash = 'topup';
+      switchView('topup');
+      closeModal('productDetailModal');
+    }
+    return;
+  }
+
+  if (!confirm(`ยืนยันการสั่งซื้อ: "${p.name}" ในราคา ฿${p.price.toLocaleString()}?`)) {
+    return;
+  }
+
+  const res = await api('/api/orders/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ productId })
+  });
+
+  if (res.success) {
+    state.user.balance = res.newBalance;
+    renderUserNav();
+    closeModal('productDetailModal');
+    renderPurchaseSuccessModal(res.order);
+  } else {
+    showToast(res.message, 'error');
+  }
+}
+
+function renderPurchaseSuccessModal(order) {
+  const modalBody = document.getElementById('purchaseSuccessBody');
+  if (!modalBody) return;
+
+  modalBody.innerHTML = `
+    <div style="text-align: center; margin-bottom: 1.25rem;">
+      <div style="font-size: 2.8rem; margin-bottom: 0.4rem;">🎉</div>
+      <h3 style="color: #fff; font-size: 1.3rem; margin-bottom: 0.35rem;">สั่งซื้อสำเร็จเรียบร้อย!</h3>
+      <p style="color: var(--text-muted); font-size: 0.88rem;">คุณสามารถกดดาวน์โหลดไฟล์สคริปต์ไปใช้งานได้ทันที</p>
+    </div>
+
+    <div style="background: var(--bg-input); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 1.25rem; margin-bottom: 1.25rem; text-align: center;">
+      <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.25rem;">รหัสคำสั่งซื้อ: <b>${order.order_code}</b></div>
+      <div style="font-size: 1.15rem; font-weight: 700; color: #fff;">${order.product_name}</div>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem;">
+      <a href="${order.file_url}" target="_blank" class="btn btn-primary btn-lg" style="flex: 1;">
+        📥 ดาวน์โหลดไฟล์ (.ZIP)
+      </a>
+      <button class="btn btn-secondary btn-lg" onclick="closeModal('purchaseSuccessModal'); switchView('orders');">
+        ดูสคริปต์ของฉัน
+      </button>
+    </div>
+  `;
+
+  openModal('purchaseSuccessModal');
+}
+
+// ----------------------------------------------------
+// Topup System (PromptPay & TrueMoney)
+// ----------------------------------------------------
+function setupTopup() {
+  const tabPromptPay = document.getElementById('tabPromptPay');
+  const tabTrueMoney = document.getElementById('tabTrueMoney');
+  const stagePromptPay = document.getElementById('stagePromptPay');
+  const stageTrueMoney = document.getElementById('stageTrueMoney');
+
+  if (tabPromptPay && tabTrueMoney) {
+    tabPromptPay.addEventListener('click', () => {
+      tabPromptPay.classList.add('active');
+      tabTrueMoney.classList.remove('active');
+      stagePromptPay.style.display = 'block';
+      stageTrueMoney.style.display = 'none';
+    });
+
+    tabTrueMoney.addEventListener('click', () => {
+      tabTrueMoney.classList.add('active');
+      tabPromptPay.classList.remove('active');
+      stageTrueMoney.style.display = 'block';
+      stagePromptPay.style.display = 'none';
+    });
+  }
+
+  // Quick Amount Chips
+  document.querySelectorAll('.amount-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.amount-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const val = chip.getAttribute('data-amount');
+      const input = document.getElementById('customAmountInput');
+      if (input) input.value = val;
+    });
+  });
+
+  // PromptPay QR Generation
+  const btnGenQR = document.getElementById('btnGenPromptPayQR');
+  if (btnGenQR) {
+    btnGenQR.addEventListener('click', async () => {
+      if (!state.user) {
+        showToast('กรุณาเข้าสู่ระบบก่อนเติมเงิน', 'error');
+        openAuthModal('login');
+        return;
+      }
+
+      const input = document.getElementById('customAmountInput');
+      const amount = Number(input.value);
+
+      if (!amount || amount < 10) {
+        showToast('จำนวนเงินขั้นต่ำ 10 บาท', 'error');
+        return;
+      }
+
+      btnGenQR.disabled = true;
+      btnGenQR.textContent = 'กำลังสร้าง QR...';
+
+      const res = await api('/api/topup/promptpay-qr', {
+        method: 'POST',
+        body: JSON.stringify({ amount })
+      });
+
+      btnGenQR.disabled = false;
+      btnGenQR.textContent = 'ดูเลขบัญชีสำหรับโอนเงิน';
+
+      if (res.success) {
+        renderPromptPayQR(res);
+      } else {
+        showToast(res.message, 'error');
+      }
+    });
+  }
+
+  // TrueMoney
+  const btnRedeemTM = document.getElementById('btnRedeemTrueMoney');
+  if (btnRedeemTM) {
+    btnRedeemTM.addEventListener('click', async () => {
+      if (!state.user) {
+        showToast('กรุณาเข้าสู่ระบบก่อนเติมเงิน', 'error');
+        openAuthModal('login');
+        return;
+      }
+
+      const voucherInput = document.getElementById('truemoneyVoucherInput');
+      const voucherUrl = voucherInput.value.trim();
+
+      if (!voucherUrl) {
+        showToast('กรุณากรอกลิงก์ซองของขวัญ', 'error');
+        return;
+      }
+
+      btnRedeemTM.disabled = true;
+      btnRedeemTM.textContent = 'กำลังตรวจสอบ...';
+
+      const res = await api('/api/topup/truemoney', {
+        method: 'POST',
+        body: JSON.stringify({ voucherUrl })
+      });
+
+      btnRedeemTM.disabled = false;
+      btnRedeemTM.textContent = 'ยืนยันรับซองของขวัญ';
+
+      if (res.success) {
+        state.user.balance = res.newBalance;
+        renderUserNav();
+        voucherInput.value = '';
+        showToast(res.message);
+        loadTopupHistory();
+      } else {
+        showToast(res.message, 'error');
+      }
+    });
+  }
+}
+
+function renderPromptPayQR(data) {
+  const container = document.getElementById('promptPayQRContainer');
+  if (!container) return;
+
+  const scbAcc = data.bankAccount || '5632881610';
+  const scbAccFormatted = data.bankAccountFormatted || '563-2-88161-0';
+  const scbName = data.accountName || 'ธาม สุวรรณรัตน์';
+
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div class="qr-display-box" style="max-width: 440px; margin: 1.5rem auto 0; text-align: center;">
+      <!-- SCB VIP Bank Card -->
+      <div style="background: linear-gradient(135deg, #4E2A84 0%, #220e3d 100%); border: 1px solid rgba(167, 139, 250, 0.45); border-radius: var(--radius-md); padding: 1.35rem; text-align: left; margin-bottom: 1.25rem; box-shadow: 0 10px 25px rgba(78, 42, 132, 0.4); position: relative; overflow: hidden;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div style="width: 40px; height: 40px; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #4E2A84; font-size: 0.92rem; box-shadow: 0 2px 8px rgba(0,0,0,0.25);">
+              SCB
+            </div>
+            <div>
+              <div style="font-weight: 800; color: #fff; font-size: 1.05rem; letter-spacing: 0.2px;">ธนาคารไทยพาณิชย์</div>
+              <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.75);">Siam Commercial Bank</div>
+            </div>
+          </div>
+          <span style="background: rgba(255,255,255,0.2); color: #fff; font-size: 0.72rem; font-weight: 600; padding: 0.25rem 0.65rem; border-radius: 999px;">
+            บัญชีทางการของร้าน
+          </span>
+        </div>
+
+        <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); padding: 0.85rem 1rem; margin: 0.75rem 0;">
+          <div style="font-size: 0.75rem; color: rgba(255,255,255,0.75); text-transform: uppercase;">
+            เลขที่บัญชีสำหรับโอนเงิน:
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.25rem;">
+            <div style="font-size: 1.55rem; font-weight: 900; font-family: var(--font-mono); color: #fff; letter-spacing: 2px;">
+              ${scbAccFormatted}
+            </div>
+            <button type="button" class="btn btn-sm" id="btnCopyScbAcc" style="background: #fff; color: #4E2A84; font-weight: 800; padding: 0.45rem 0.9rem; font-size: 0.82rem; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
+              📋 คัดลอกเลข
+            </button>
+          </div>
+        </div>
+
+        <div style="font-size: 0.9rem; color: rgba(255,255,255,0.95); border-top: 1px solid rgba(255,255,255,0.15); padding-top: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+          <span>ชื่อบัญชี: <b style="color: #fff; font-size: 0.95rem;">${scbName}</b></span>
+          <span style="font-size: 0.75rem; color: #fff; background: rgba(0,0,0,0.3); padding: 0.25rem 0.6rem; border-radius: 4px;">ธ.ไทยพาณิชย์</span>
+        </div>
+      </div>
+
+      <!-- Amount Highlight -->
+      <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.85rem; margin-bottom: 1rem;">
+        <div style="font-size: 0.82rem; color: var(--text-dim);">ยอดเงินที่ต้องโอนเข้าบัญชี:</div>
+        <div style="font-size: 1.5rem; font-family: var(--font-mono); font-weight: 800; color: var(--accent-emerald); margin-top: 0.2rem;">
+          ฿${data.amount.toLocaleString()}
+          ${data.bonus > 0 ? `<span style="font-size: 0.88rem; color: var(--accent-cyan); font-weight: 500;">(+แถมโบนัส ฿${data.bonus})</span>` : ''}
+        </div>
+      </div>
+
+      <!-- Quick Steps -->
+      <div style="background: rgba(78, 42, 132, 0.12); border: 1px solid rgba(167, 139, 250, 0.25); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-bottom: 1.25rem; text-align: left; font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+        <b style="color: #fff;">💡 วิธีเติมเงินง่ายๆ:</b><br>
+        1. กดปุ่ม <b>"คัดลอกเลข"</b> ด้านบน แล้วเปิดแอปธนาคารของคุณเพื่อโอนเงิน<br>
+        2. บันทึกรูปสลิปการโอนเงิน<br>
+        3. นำรูปสลิปมาแนบในช่องด้านล่าง แล้วกดยืนยัน เงินเข้าทันที!
+      </div>
+
+      <!-- Slip File Upload Section -->
+      <div style="width: 100%; background: var(--bg-input); border: 1px dashed var(--border-medium); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1rem; text-align: left;">
+        <label class="form-label" style="font-size: 0.82rem; color: #fff; display: block; margin-bottom: 0.35rem;">
+          📎 แนบรูปสลิปโอนเงิน (สลิปโอนเข้าไทยพาณิชย์ 5632881610):
+        </label>
+        <input type="file" id="topupSlipFileInput" accept="image/*" class="form-control" style="padding: 0.45rem; font-size: 0.82rem;">
+        <div id="slipPreviewWrap" style="display: none; margin-top: 0.75rem; text-align: center;">
+          <img id="slipPreviewImg" style="max-width: 150px; border-radius: 4px; border: 1px solid var(--border-medium);">
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-lg" style="width: 100%;" id="btnVerifySlip">
+        🔍 ตรวจสอบสลิปและเติมเงินอัตโนมัติ
+      </button>
+    </div>
+  `;
+
+  // Copy account button listener
+  const btnCopy = document.getElementById('btnCopyScbAcc');
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      navigator.clipboard.writeText(scbAcc).then(() => {
+        btnCopy.textContent = '✅ คัดลอกแล้ว!';
+        setTimeout(() => { btnCopy.textContent = '📋 คัดลอกเลข'; }, 2000);
+      });
+    });
+  }
+
+  // Image preview handler
+  const fileInput = document.getElementById('topupSlipFileInput');
+  const previewWrap = document.getElementById('slipPreviewWrap');
+  const previewImg = document.getElementById('slipPreviewImg');
+
+  if (fileInput && previewWrap && previewImg) {
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          previewImg.src = e.target.result;
+          previewWrap.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      } else {
+        previewWrap.style.display = 'none';
+      }
+    });
+  }
+
+  // Automated Slip Verification Click Handler
+  document.getElementById('btnVerifySlip').addEventListener('click', async () => {
+    const file = fileInput ? fileInput.files[0] : null;
+    if (!file) {
+      showToast('กรุณาเลือกไฟล์รูปสลิปโอนเงินก่อนกดยืนยัน', 'error');
+      return;
+    }
+
+    const verifyBtn = document.getElementById('btnVerifySlip');
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = 'กำลังสแกนและตรวจสอบสลิปกับธนาคาร...';
+
+    const formData = new FormData();
+    formData.append('slip', file);
+    formData.append('amount', String(data.amount));
+    formData.append('refCode', data.refCode);
+
+    try {
+      const res = await fetch('/api/topup/verify-slip', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${state.token}`
+        },
+        body: formData
+      });
+
+      const result = await res.json();
+      verifyBtn.disabled = false;
+      verifyBtn.textContent = '🔍 ตรวจสอบสลิปและเติมเงินอัตโนมัติ';
+
+      if (result.success) {
+        state.user.balance = result.newBalance;
+        renderUserNav();
+        container.style.display = 'none';
+        showToast(result.message);
+        loadTopupHistory();
+      } else {
+        showToast(result.message, 'error');
+      }
+    } catch (err) {
+      verifyBtn.disabled = false;
+      verifyBtn.textContent = '🔍 ตรวจสอบสลิปและเติมเงินอัตโนมัติ';
+      showToast('เกิดข้อผิดพลาดในการส่งข้อมูลสลิป', 'error');
+    }
+  });
+
+  container.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function loadTopupHistory() {
+  if (!state.user) return;
+  const res = await api('/api/topup/history');
+  const tbody = document.getElementById('topupHistoryTbody');
+  if (!tbody) return;
+
+  if (res.success && res.history.length > 0) {
+    tbody.innerHTML = res.history.map(item => `
+      <tr>
+        <td><code>${item.ref_code}</code></td>
+        <td>${item.method === 'promptpay' ? 'พร้อมเพย์' : 'TrueMoney'}</td>
+        <td style="color: var(--accent-emerald); font-weight: 700;">฿${item.amount.toLocaleString()}</td>
+        <td>+฿${item.bonus.toLocaleString()}</td>
+        <td><span style="color: var(--accent-emerald); font-size: 0.8rem;">สำเร็จ</span></td>
+        <td style="color: var(--text-dim); font-size: 0.8rem;">${new Date(item.created_at).toLocaleDateString('th-TH')}</td>
+      </tr>
+    `).join('');
+  } else {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">ยังไม่มีประวัติการเติมเงิน</td></tr>`;
+  }
+}
+
+// ----------------------------------------------------
+// My Orders & Downloads View
+// ----------------------------------------------------
+async function loadUserOrders() {
+  const container = document.getElementById('ordersContainer');
+  if (!container) return;
+
+  if (!state.user) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 4rem 1rem; color: var(--text-dim);">
+        <h3>กรุณาเข้าสู่ระบบเพื่อดูสคริปต์ของคุณ</h3>
+        <button class="btn btn-primary" style="margin-top: 1rem;" onclick="openAuthModal('login')">เข้าสู่ระบบ</button>
+      </div>
+    `;
+    return;
+  }
+
+  const res = await api('/api/user/orders');
+
+  if (res.success && res.orders.length > 0) {
+    container.innerHTML = `
+      <div class="orders-list">
+        ${res.orders.map(order => `
+          <div class="order-item-card">
+            <div class="order-item-left">
+              <img class="order-thumb" src="${order.image || '/assets/roleplay.jpg'}" alt="${order.product_name}">
+              <div class="order-meta">
+                <h3>${order.product_name}</h3>
+                <div style="font-size: 0.85rem; color: var(--text-dim);">
+                  สั่งซื้อเมื่อ: ${new Date(order.created_at).toLocaleDateString('th-TH')} • รหัสคำสั่งซื้อ: <code>${order.order_code}</code>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <a href="${order.file_url}" target="_blank" class="btn btn-primary">
+                📥 ดาวน์โหลดไฟล์ (.ZIP)
+              </a>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } else {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 4rem 1rem; color: var(--text-dim);">
+        <h3>คุณยังไม่มีสคริปต์ในครอบครอง</h3>
+        <p style="margin: 0.5rem 0 1rem;">เลือกดูสคริปต์และระบบ SA-MP ที่น่าสนใจได้ที่หน้าร้านค้า</p>
+        <button class="btn btn-primary" onclick="switchView('store')">ไปยังหน้าร้านค้า</button>
+      </div>
+    `;
+  }
+}
+
+// ----------------------------------------------------
+// ADMIN SCRIPT MANAGEMENT (ADD, DELETE, MANAGE)
+// ----------------------------------------------------
+async function loadAdminProducts() {
+  if (!state.user || state.user.role !== 'admin') {
+    const tbody = document.getElementById('adminProductsTbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem;">เฉพาะแอดมินเท่านั้นที่สามารถเข้าถึงได้</td></tr>`;
+    return;
+  }
+
+  const res = await api('/api/admin/products');
+  const tbody = document.getElementById('adminProductsTbody');
+  if (!tbody || !res.success) return;
+
+  if (res.products.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 2rem;">ยังไม่มีสินค้าในระบบ</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = res.products.map(p => `
+    <tr>
+      <td><span style="font-family: var(--font-mono); color: var(--text-dim);">#${p.id}</span></td>
+      <td>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <img src="${p.image}" style="width: 44px; height: 26px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border-subtle);">
+          <div>
+            <b style="color: #fff;">${p.name}</b>
+            <div style="font-size: 0.78rem; color: var(--text-dim);">${p.samp_version || '0.3.7'}</div>
+          </div>
+        </div>
+      </td>
+      <td><span style="color: var(--text-muted); font-size: 0.82rem;">${p.category_slug}</span></td>
+      <td><strong style="color: var(--accent-emerald); font-family: var(--font-mono);">฿${p.price.toLocaleString()}</strong></td>
+      <td><span style="color: var(--text-dim);">${p.sold_count} ชิ้น</span></td>
+      <td style="text-align: right;">
+        <button class="btn btn-danger btn-sm" onclick="adminDeleteProduct(${p.id}, '${escapeHtml(p.name)}')">
+          🗑️ ลบสคริปต์
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// Admin Delete Script Action
+async function adminDeleteProduct(id, name) {
+  if (!confirm(`คุณต้องการลบสคริปต์ "${name}" ออกจากร้าน Nexus หรือไม่?\n(การลบนี้จะนำสคริปต์ออกจากฐานข้อมูลทันที)`)) {
+    return;
+  }
+
+  const res = await api(`/api/admin/products/${id}`, { method: 'DELETE' });
+  if (res.success) {
+    showToast(`ลบสคริปต์ "${name}" สำเร็จแล้ว`);
+    loadAdminProducts();
+    loadProducts();
+    loadCategories();
+  } else {
+    showToast(res.message, 'error');
+  }
+}
+
+// Open Add Product Modal
+function openAddProductModal() {
+  document.getElementById('formAddProduct').reset();
+  const customImgInput = document.getElementById('adminProdImageCustom');
+  if (customImgInput) customImgInput.style.display = 'none';
+  openModal('addProductModal');
+}
+
+// Setup Admin Form Listener
+function setupAdminForm() {
+  // Toggle custom image input
+  const imgSelect = document.getElementById('adminProdImageSelect');
+  const customInput = document.getElementById('adminProdImageCustom');
+  if (imgSelect && customInput) {
+    imgSelect.addEventListener('change', () => {
+      customInput.style.display = imgSelect.value === 'custom' ? 'block' : 'none';
+    });
+  }
+
+  // Handle Form Submit
+  const formAdd = document.getElementById('formAddProduct');
+  if (formAdd) {
+    formAdd.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      let finalImage = imgSelect ? imgSelect.value : '/assets/roleplay.jpg';
+      if (finalImage === 'custom' && customInput && customInput.value.trim()) {
+        finalImage = customInput.value.trim();
+      }
+
+      const productData = {
+        name: document.getElementById('adminProdName').value.trim(),
+        category_slug: document.getElementById('adminProdCat').value,
+        price: Number(document.getElementById('adminProdPrice').value),
+        samp_version: document.getElementById('adminProdVersion').value.trim() || '0.3.7-R2',
+        short_desc: document.getElementById('adminProdShortDesc').value.trim(),
+        description: document.getElementById('adminProdDesc').value.trim(),
+        image: finalImage,
+        file_url: document.getElementById('adminProdFileUrl').value.trim(),
+        features: [
+          'ระบบทำงานได้ 100% ไม่มี Error หรือ Crash',
+          'รองรับทั้ง SA-MP 0.3.7 และ open.mp',
+          'มีเอกสารสอนติดตั้งภาษาไทยและไฟล์ Database พร้อมใช้งาน'
+        ],
+        requirements: ['SA-MP Server 0.3.7-R2', 'Streamer Plugin']
+      };
+
+      const res = await api('/api/admin/products', {
+        method: 'POST',
+        body: JSON.stringify(productData)
+      });
+
+      if (res.success) {
+        showToast('เพิ่มสคริปต์ใหม่ลงร้าน Nexus สำเร็จ!');
+        closeModal('addProductModal');
+        loadAdminProducts();
+        loadProducts();
+        loadCategories();
+      } else {
+        showToast(res.message, 'error');
+      }
+    });
+  }
+
+  // Load and save SlipOK settings
+  loadSlipokSettings();
+  const formSlipok = document.getElementById('formSlipokSettings');
+  if (formSlipok) {
+    formSlipok.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const branchId = document.getElementById('settingSlipokBranchId').value.trim();
+      const apiKey = document.getElementById('settingSlipokApiKey').value.trim();
+
+      const res = await api('/api/admin/settings', {
+        method: 'POST',
+        body: JSON.stringify({
+          settings: {
+            slipok_branch_id: branchId,
+            slipok_api_key: apiKey
+          }
+        })
+      });
+
+      if (res.success) {
+        showToast('บันทึกการตั้งค่า SlipOK เรียบร้อยแล้ว!');
+      } else {
+        showToast(res.message, 'error');
+      }
+    });
+  }
+}
+
+async function loadSlipokSettings() {
+  const res = await api('/api/settings');
+  if (res.success && res.settings) {
+    const branchInput = document.getElementById('settingSlipokBranchId');
+    const keyInput = document.getElementById('settingSlipokApiKey');
+    if (branchInput && res.settings.slipok_branch_id) {
+      branchInput.value = res.settings.slipok_branch_id;
+    }
+    if (keyInput && res.settings.slipok_api_key) {
+      keyInput.value = res.settings.slipok_api_key;
+    }
+  }
+}
+
+// Search and Filter Listeners
+document.addEventListener('DOMContentLoaded', () => {
+  const searchInput = document.getElementById('storeSearchInput');
+  if (searchInput) {
+    let debounce;
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        state.searchQuery = e.target.value.trim();
+        loadProducts();
+      }, 250);
+    });
+  }
+
+  const sortSelect = document.getElementById('storeSortSelect');
+  if (sortSelect) {
+    sortSelect.addEventListener('change', (e) => {
+      state.sortBy = e.target.value;
+      loadProducts();
+    });
+  }
+});

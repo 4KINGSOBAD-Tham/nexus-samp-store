@@ -1,0 +1,4 @@
+node_modules/
+cloudflared.exe
+.DS_Store
+*.log

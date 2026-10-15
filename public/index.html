@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus SAMP Store — ศูนย์รวมสคริปต์และระบบ GTA SA-MP คุณภาพสูง</title>
+  <meta name="description"
+    content="Nexus SAMP Store จำหน่ายระบบเกมและสคริปต์ GTA San Andreas Multiplayer (SA-MP) คุณภาพสูง จัดส่งอัตโนมัติ 24 ชม.">
+  <link rel="icon" href="/assets/logo.jpg" type="image/jpeg">
+  <link rel="stylesheet" href="/css/style.css?v=2.2">
+</head>
+
+<body>
+
+  <!-- Announcement Bar -->
+  <div class="announcement-bar">
+    <span class="announcement-badge">NEXUS STORE</span>
+    <span>⚡ ยินดีต้อนรับสู่ Nexus SAMP Store! เติมเงินครบ 500 บาท รับโบนัสฟรี +10% | จัดส่งไฟล์ดาวน์โหลดอัตโนมัติ 24
+      ชม.</span>
+  </div>
+
+  <!-- Header Topbar -->
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <!-- Brand -->
+      <a href="#store" class="brand" data-view="store">
+        <img class="brand-logo-img" src="/assets/logo.jpg" alt="Nexus SAMP Store">
+        <div class="brand-name">NEXUS <span>SAMP</span></div>
+      </a>
+
+      <!-- Navigation Links -->
+      <nav class="nav-center">
+        <a class="nav-link active" href="#store" data-view="store">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 7 6 3h12l2 4" />
+            <path d="M4 7h16v3a2.5 2.5 0 0 1-5 0 2.5 2.5 0 0 1-5 0 2.5 2.5 0 0 1-5 0Z" />
+            <path d="M5 12.5V21h14v-8.5" />
+            <path d="M9 21v-5h6v5" />
+          </svg>
+          ร้านค้าสคริปต์
+        </a>
+        <a class="nav-link" href="#topup" data-view="topup">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="9" />
+            <path
+              d="M12 6.5v11M15 8.7c-.7-.8-1.8-1.2-3-1.2-1.8 0-3.2.9-3.2 2.3 0 2.9 6.4 1.4 6.4 4.3 0 1.4-1.5 2.4-3.2 2.4-1.3 0-2.5-.5-3.2-1.3" />
+          </svg>
+          เติมเงินพอยท์
+        </a>
+        <a class="nav-link" href="#orders" data-view="orders">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m12 2 8 4.5v11L12 22l-8-4.5v-11Z" />
+            <path d="m4 6.5 8 4.5 8-4.5" />
+            <path d="M12 11v11" />
+          </svg>
+          สคริปต์ของฉัน
+        </a>
+        <!-- Admin Link (Displayed dynamically if user is Admin) -->
+        <a class="nav-link admin-nav-pill" href="#admin" data-view="admin" id="navAdminLink" style="display: none;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          จัดการสคริปต์ (แอดมิน)
+        </a>
+      </nav>
+
+      <!-- Auth Area -->
+      <div class="nav-right" id="navAuth">
+        <button class="btn btn-secondary btn-sm" onclick="openAuthModal('register')">สมัครสมาชิก</button>
+        <button class="btn btn-primary btn-sm" onclick="openAuthModal('login')">เข้าสู่ระบบ</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ====================================================
+         VIEW: STORE (DEFAULT CLEAN FRONTEND)
+         ==================================================== -->
+    <section class="app-view" id="view-store">
+      <!-- Minimalist Hero -->
+      <div class="hero-clean">
+        <div class="container hero-clean-inner">
+          <div class="hero-text">
+            <div class="hero-chip">SA-MP 0.3.7 & OPEN.MP • AUTOMATED STORE</div>
+            <h1 class="hero-title">Nexus SAMP <span>Store</span></h1>
+            <p class="hero-desc">
+              คลังจำหน่ายระบบเกมและสคริปต์ GTA San Andreas Multiplayer
+
+            </p>
+            <div class="hero-stats-row">
+              <div class="hero-stat-item">
+                <strong id="statProdCount">8</strong>
+                <span>สคริปต์พร้อมใช้งาน</span>
+              </div>
+              <div class="hero-stat-item">
+                <strong>อัตโนมัติ</strong>
+                <span>ส่งมอบตลอด 24 ชม.</span>
+              </div>
+              <div class="hero-stat-item">
+                <strong>ปลอดภัย 100%</strong>
+                <span>ไร้ Backdoor ไร้ไวรัส</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Store Catalog Section -->
+      <div class="container">
+        <!-- Toolbar: Categories, Search, Sort -->
+        <div class="store-toolbar">
+          <div class="cat-pills" id="homeCategories">
+            <!-- Rendered by app.js -->
+          </div>
+
+          <div class="search-sort-group">
+            <div class="search-box">
+              <svg class="search-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input type="text" class="search-input" id="storeSearchInput" placeholder="ค้นหาสคริปต์...">
+            </div>
+            <select class="sort-select" id="storeSortSelect">
+              <option value="latest">ล่าสุด</option>
+              <option value="popular">ยอดนิยม</option>
+              <option value="price_asc">ราคา: ต่ำไปสูง</option>
+              <option value="price_desc">ราคา: สูงไปต่ำ</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Products Grid -->
+        <div class="products-grid" id="storeProductsGrid">
+          <!-- Rendered by app.js -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================
+         VIEW: TOPUP (CLEAN PROMPTPAY & TRUEMONEY)
+         ==================================================== -->
+    <section class="app-view" id="view-topup" style="display: none;">
+      <div class="container">
+        <div class="topup-card">
+          <h2 style="font-size: 1.35rem; font-weight: 700; color: #fff; margin-bottom: 0.35rem;">เติมเงินเข้ากระเป๋า
+          </h2>
+          <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1.5rem;">
+            เลือกช่องทางที่สะดวกเพื่อเติมเครดิตเข้าสู่บัญชีของคุณ
+          </p>
+
+          <div class="topup-tab-buttons">
+            <button class="topup-toggle-btn active" id="tabPromptPay">🏦 ธนาคารไทยพาณิชย์ (SCB)</button>
+            <button class="topup-toggle-btn" id="tabTrueMoney">ซองของขวัญ TrueMoney</button>
+          </div>
+
+          <!-- SCB Bank Box -->
+          <div id="stagePromptPay">
+            <div style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 0.75rem;">เลือกจำนวนเงิน:</div>
+            <div class="amount-grid">
+              <div class="amount-chip active" data-amount="50">฿50</div>
+              <div class="amount-chip" data-amount="100">฿100</div>
+              <div class="amount-chip" data-amount="300">฿300</div>
+              <div class="amount-chip" data-amount="500">฿500 (+฿50)</div>
+              <div class="amount-chip" data-amount="1000">฿1,000 (+฿150)</div>
+              <div class="amount-chip" data-amount="2000">฿2,000 (+฿300)</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">หรือระบุจำนวนเงินที่ต้องการ (บาท)</label>
+              <input type="number" class="form-control" id="customAmountInput" value="50" min="10" step="1">
+            </div>
+
+            <button class="btn btn-primary btn-lg" style="width: 100%; margin-top: 0.5rem;" id="btnGenPromptPayQR">
+              ดูเลขบัญชีสำหรับโอนเงิน
+            </button>
+
+            <!-- PromptPay QR Destination -->
+            <div id="promptPayQRContainer" style="display: none;"></div>
+          </div>
+
+          <!-- TrueMoney Box -->
+          <div id="stageTrueMoney" style="display: none;">
+            <div class="form-group">
+              <label class="form-label">ลิงก์ซองของขวัญ TrueMoney Wallet</label>
+              <input type="text" class="form-control" id="truemoneyVoucherInput"
+                placeholder="https://gift.truemoney.com/campaign/?v=...">
+            </div>
+            <button class="btn btn-primary btn-lg" style="width: 100%; margin-top: 0.5rem;" id="btnRedeemTrueMoney">
+              ยืนยันรับซองของขวัญ
+            </button>
+          </div>
+
+          <!-- Topup History -->
+          <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-subtle);">
+            <div style="font-size: 0.95rem; font-weight: 600; color: #fff; margin-bottom: 0.75rem;">
+              ประวัติการเติมเงินล่าสุด</div>
+            <div style="overflow-x: auto;">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>รหัสอ้างอิง</th>
+                    <th>ช่องทาง</th>
+                    <th>จำนวนเงิน</th>
+                    <th>โบนัส</th>
+                    <th>สถานะ</th>
+                    <th>เวลา</th>
+                  </tr>
+                </thead>
+                <tbody id="topupHistoryTbody">
+                  <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">ยังไม่มีประวัติ
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================
+         VIEW: MY ORDERS / DOWNLOADS
+         ==================================================== -->
+    <section class="app-view" id="view-orders" style="display: none;">
+      <div class="container" style="padding-top: 2rem;">
+        <h2 style="font-size: 1.35rem; font-weight: 700; color: #fff; margin-bottom: 0.35rem;">สคริปต์ของฉัน &
+          ประวัติการสั่งซื้อ</h2>
+        <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1.5rem;">
+          ดาวน์โหลดไฟล์สคริปต์ของระบบที่คุณสั่งซื้อไว้ได้ตลอด 24 ชั่วโมง
+        </p>
+
+        <div id="ordersContainer">
+          <!-- Rendered by app.js -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================
+         VIEW: ADMIN MANAGEMENT PANEL (NEW!)
+         ==================================================== -->
+    <section class="app-view" id="view-admin" style="display: none;">
+      <div class="container" style="padding-top: 2rem; padding-bottom: 3.5rem;">
+        <div class="admin-view-header">
+          <div>
+            <h2 style="font-size: 1.35rem; font-weight: 700; color: #fff;">แผงจัดการสคริปต์ (Admin Panel)</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">เพิ่ม ลบ และปรับปรุงสินค้าใน Nexus SAMP Store
+              ได้ทันที</p>
+          </div>
+          <button class="btn btn-primary" onclick="openAddProductModal()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            เพิ่มสคริปต์ใหม่
+          </button>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th style="width: 60px;">ID</th>
+                <th>สคริปต์</th>
+                <th>หมวดหมู่</th>
+                <th>ราคา (บาท)</th>
+                <th>ยอดขาย</th>
+                <th style="text-align: right; width: 140px;">การจัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="adminProductsTbody">
+              <!-- Rendered by app.js -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- SlipOK Automated Verification Configuration -->
+        <div
+          style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.5rem; margin-top: 2rem;">
+          <h3 style="color: #fff; font-size: 1.15rem; margin-bottom: 0.35rem;">⚙️ ตั้งค่าระบบตรวจสลิปอัตโนมัติ (SlipOK
+            API)</h3>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem;">
+            เชื่อมต่อ SlipOK เพื่อตรวจจับยอดเงินเข้าบัญชีจริงแบบ Realtime ป้องกันการโกง 100%
+            (<a href="https://slipok.com" target="_blank"
+              style="color: var(--accent-cyan); text-decoration: underline;">สมัครรับ API Key ที่ SlipOK.com</a>)
+          </p>
+          <form id="formSlipokSettings">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div class="form-group">
+                <label class="form-label">SlipOK Branch ID</label>
+                <input type="text" class="form-control" id="settingSlipokBranchId" placeholder="เช่น 12345" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">SlipOK API Key</label>
+                <input type="password" class="form-control" id="settingSlipokApiKey" placeholder="เช่น SLIPOK..."
+                  required>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">บันทึกการตั้งค่า SlipOK</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Clean Footer -->
+  <footer class="footer">
+    <div class="container"
+      style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+      <div class="brand">
+        <img class="brand-logo-img" src="/assets/logo.jpg" alt="Nexus SAMP Store" style="width: 28px; height: 28px;">
+        <div class="brand-name" style="font-size: 1rem;">NEXUS <span>SAMP</span> STORE</div>
+      </div>
+      <div>
+        © 2026 Nexus SAMP Store. All rights reserved.
+      </div>
+      <div style="display: flex; gap: 1rem;">
+        <a href="#store" data-view="store" style="color: var(--text-muted);">ร้านค้า</a>
+        <a href="#topup" data-view="topup" style="color: var(--text-muted);">เติมเงิน</a>
+        <a href="https://discord.gg/samp-thailand" target="_blank" style="color: var(--accent-cyan);">Discord
+          ติดต่อเรา</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- ====================================================
+       MODALS
+       ==================================================== -->
+
+  <!-- 1. Auth Modal -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-window">
+      <div class="modal-top">
+        <h3 id="authModalTitle">เข้าสู่ระบบ / สมัครสมาชิก</h3>
+        <button class="modal-close-x" onclick="closeModal('authModal')">&times;</button>
+      </div>
+      <div class="modal-content">
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem;">
+          <button class="btn btn-secondary btn-sm" id="authTabLogin" style="flex: 1;">เข้าสู่ระบบ</button>
+          <button class="btn btn-secondary btn-sm" id="authTabRegister" style="flex: 1;">สมัครสมาชิก</button>
+        </div>
+
+        <form id="formLogin">
+          <div class="form-group">
+            <label class="form-label">ชื่อผู้ใช้ (Username)</label>
+            <input type="text" class="form-control" id="loginUsername" placeholder="เช่น admin หรือ player1" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">รหัสผ่าน (Password)</label>
+            <input type="password" class="form-control" id="loginPassword" placeholder="••••••••" required>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 1rem;">
+            🔑 แอดมิน: <code>admin</code> / รหัสผ่าน <code>admin1234</code><br>
+            🎮 ผู้เล่นทดสอบ: <code>player1</code> / รหัสผ่าน <code>123456</code> (มียอดเงิน ฿500)
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">เข้าสู่ระบบ</button>
+        </form>
+
+        <form id="formRegister" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">ชื่อผู้ใช้</label>
+            <input type="text" class="form-control" id="regUsername" placeholder="อย่างน้อย 3 ตัวอักษร" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">อีเมล</label>
+            <input type="email" class="form-control" id="regEmail" placeholder="name@email.com" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">รหัสผ่าน</label>
+            <input type="password" class="form-control" id="regPassword" placeholder="อย่างน้อย 6 ตัวอักษร" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">สมัครสมาชิกใหม่</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Product Detail Modal -->
+  <div class="modal-overlay" id="productDetailModal">
+    <div class="modal-window lg">
+      <div class="modal-top">
+        <h3>รายละเอียดสคริปต์</h3>
+        <button class="modal-close-x" onclick="closeModal('productDetailModal')">&times;</button>
+      </div>
+      <div class="modal-content" id="productDetailBody">
+        <!-- Rendered by app.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Add Script Modal (Admin) -->
+  <div class="modal-overlay" id="addProductModal">
+    <div class="modal-window lg">
+      <div class="modal-top">
+        <h3>➕ เพิ่มสคริปต์ใหม่ลงในร้าน Nexus</h3>
+        <button class="modal-close-x" onclick="closeModal('addProductModal')">&times;</button>
+      </div>
+      <div class="modal-content">
+        <form id="formAddProduct">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+            <div class="form-group">
+              <label class="form-label">ชื่อสคริปต์ (Name)</label>
+              <input type="text" class="form-control" id="adminProdName" placeholder="เช่น ระบบแต่งรถ Los Santos Custom"
+                required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">หมวดหมู่ (Category)</label>
+              <select class="form-control" id="adminProdCat">
+                <option value="gamemode">โหมดเกมเต็มระบบ (Gamemodes)</option>
+                <option value="inventory-ui">กระเป๋า & UI Textdraw</option>
+                <option value="turf-gang">ระบบแก๊งค์ & ยึดจุด (Turf)</option>
+                <option value="anticheat-launcher">ระบบกันแฮก & Launcher</option>
+                <option value="jobs-system">ระบบงาน & เศรษฐกิจ (Jobs)</option>
+                <option value="housing-biz">ระบบบ้าน & ธุรกิจ (Housing)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">ราคาขาย (บาท)</label>
+              <input type="number" class="form-control" id="adminProdPrice" placeholder="250" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">เวอร์ชัน SA-MP</label>
+              <input type="text" class="form-control" id="adminProdVersion" value="0.3.7-R2 / open.mp">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">คำอธิบายสั้น</label>
+            <input type="text" class="form-control" id="adminProdShortDesc"
+              placeholder="อธิบายฟังก์ชันเด่นใน 1-2 ประโยค" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">รายละเอียดเชิงลึก</label>
+            <textarea class="form-control" id="adminProdDesc" rows="3"
+              placeholder="ระบุฟังก์ชันและวิธีการใช้งาน"></textarea>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+            <div class="form-group">
+              <label class="form-label">รูปภาพหน้าปก (เลือกภาพสำเร็จรูปหรือใส่ URL)</label>
+              <select class="form-control" id="adminProdImageSelect">
+                <option value="/assets/roleplay.jpg">รูปสไตล์ Roleplay / เซิร์ฟเวอร์</option>
+                <option value="/assets/inventory.jpg">รูปสไตล์ Textdraw / กระเป๋า</option>
+                <option value="/assets/turf.jpg">รูปสไตล์ Gangwar / ชิงพื้นที่</option>
+                <option value="/assets/anticheat.jpg">รูปสไตล์ Security / Launcher</option>
+                <option value="custom">ระบุลิงก์รูปเอง (Custom URL)</option>
+              </select>
+              <input type="text" class="form-control" id="adminProdImageCustom"
+                style="display: none; margin-top: 0.35rem;" placeholder="https://...">
+            </div>
+            <div class="form-group">
+              <label class="form-label">ลิงก์ดาวน์โหลดไฟล์ (.ZIP หรือ Google Drive)</label>
+              <input type="text" class="form-control" id="adminProdFileUrl"
+                value="https://github.com/samp-releases/script.zip" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 1rem;">
+            บันทึกและวางขายทันที
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Purchase Success Modal -->
+  <div class="modal-overlay" id="purchaseSuccessModal">
+    <div class="modal-window">
+      <div class="modal-top">
+        <h3>✅ ชำระเงินสำเร็จ</h3>
+        <button class="modal-close-x" onclick="closeModal('purchaseSuccessModal')">&times;</button>
+      </div>
+      <div class="modal-content" id="purchaseSuccessBody">
+        <!-- Rendered by app.js -->
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js?v=2.5"></script>
+</body>
+
+</html>

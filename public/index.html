@@ -8,7 +8,7 @@
   <meta name="description"
     content="Nexus SAMP Store จำหน่ายระบบเกมและสคริปต์ GTA San Andreas Multiplayer (SA-MP) คุณภาพสูง จัดส่งอัตโนมัติ 24 ชม.">
   <link rel="icon" href="/assets/logo.jpg" type="image/jpeg">
-  <link rel="stylesheet" href="/css/style.css?v=2.2">
+  <link rel="stylesheet" href="/css/style.css?v=2.3">
 </head>
 
 <body>
@@ -208,7 +208,7 @@
           <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-subtle);">
             <div style="font-size: 0.95rem; font-weight: 600; color: #fff; margin-bottom: 0.75rem;">
               ประวัติการเติมเงินล่าสุด</div>
-            <div style="overflow-x: auto;">
+            <div class="table-responsive">
               <table class="admin-table">
                 <thead>
                   <tr>
@@ -257,7 +257,7 @@
       <div class="container" style="padding-top: 2rem; padding-bottom: 3.5rem;">
         
         <!-- Creator Header -->
-        <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(16, 185, 129, 0.1)); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: var(--radius-md); padding: 1.75rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div class="creator-header-card">
           <div>
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
               <span style="font-size: 1.5rem;">💼</span>
@@ -277,7 +277,7 @@
         </div>
 
         <!-- Creator Stat Cards -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+        <div class="creator-stats-grid">
           <div style="background: var(--bg-surface); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 1.25rem;">
             <div style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase;">💰 ยอดเงินที่ถอนได้ (Seller Balance)</div>
             <div style="font-size: 1.8rem; font-weight: 900; font-family: var(--font-mono); color: var(--accent-emerald); margin-top: 0.35rem;" id="creatorSellerBalance">฿0.00</div>
@@ -297,7 +297,7 @@
         </div>
 
         <!-- Creator Tabs Navigation -->
-        <div style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-medium); margin-bottom: 1.5rem;">
+        <div class="creator-tabs-wrap">
           <button class="topup-toggle-btn active" id="tabCreatorMyScripts" onclick="switchCreatorTab('my-scripts')">
             📦 สคริปต์ของฉันที่ฝากขาย
           </button>
@@ -311,7 +311,7 @@
 
         <!-- Tab 1: My Submitted Scripts -->
         <div id="creatorTabMyScriptsContent">
-          <div style="overflow-x: auto;">
+          <div class="table-responsive">
             <table class="admin-table">
               <thead>
                 <tr>
@@ -348,7 +348,7 @@
                 <input type="text" class="form-control" id="creatorProdName" placeholder="เช่น ระบบประมูลรถ V2, Gamemode Gangwar 2026" required>
               </div>
 
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div class="grid-responsive-2col">
                 <div class="form-group">
                   <label class="form-label">หมวดหมู่ *</label>
                   <select class="form-control" id="creatorProdCategory" required>
@@ -406,7 +406,7 @@
 
         <!-- Tab 3: Withdrawal / Payout Request -->
         <div id="creatorTabWithdrawContent" style="display: none;">
-          <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 2rem; align-items: start;">
+          <div class="creator-withdraw-grid">
             <!-- Withdrawal Form -->
             <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.75rem;">
               <h3 style="color: #fff; font-size: 1.15rem; margin-top: 0; margin-bottom: 0.5rem;">💸 แจ้งถอนเงินสดเข้าบัญชี</h3>
@@ -460,7 +460,7 @@
                 ติดตามสถานะการโอนเงินจากแอดมิน
               </p>
               
-              <div style="overflow-x: auto;">
+              <div class="table-responsive">
                 <table class="admin-table">
                   <thead>
                     <tr>
@@ -503,7 +503,7 @@
           </button>
         </div>
 
-        <div style="overflow-x: auto;">
+        <div class="table-responsive">
           <table class="admin-table">
             <thead>
               <tr>
@@ -531,7 +531,7 @@
               style="color: var(--accent-cyan); text-decoration: underline;">สมัครรับ API Key ที่ SlipOK.com</a>)
           </p>
           <form id="formSlipokSettings">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="grid-responsive-2col">
               <div class="form-group">
                 <label class="form-label">SlipOK Branch ID</label>
                 <input type="text" class="form-control" id="settingSlipokBranchId" placeholder="เช่น 12345" required>
@@ -558,7 +558,7 @@
             </div>
             <button class="btn btn-secondary btn-sm" onclick="loadAdminMarketplacePending()">🔄 รีเฟรชรายการรอตรวจ</button>
           </div>
-          <div style="overflow-x: auto;">
+          <div class="table-responsive">
             <table class="admin-table">
               <thead>
                 <tr>
@@ -590,7 +590,7 @@
             </div>
             <button class="btn btn-secondary btn-sm" onclick="loadAdminWithdrawals()">🔄 รีเฟรชคำขอถอน</button>
           </div>
-          <div style="overflow-x: auto;">
+          <div class="table-responsive">
             <table class="admin-table">
               <thead>
                 <tr>
@@ -631,7 +631,7 @@
           </div>
 
           <!-- Security Stat Badges Grid -->
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; margin-bottom: 1.5rem;">
+          <div class="sec-stats-grid">
             <div style="background: var(--bg-input); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 0.85rem;">
               <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">การโจมตีที่บล็อกทั้งหมด</div>
               <div style="font-size: 1.6rem; font-weight: 900; font-family: var(--font-mono); color: var(--accent-rose); margin-top: 0.25rem;" id="secTotalBlocked">0</div>
@@ -653,7 +653,7 @@
           <!-- Active Security Shields List -->
           <div style="margin-bottom: 1.5rem;">
             <h4 style="color: #fff; font-size: 0.92rem; margin-bottom: 0.75rem;">🛡️ โมดูลความปลอดภัยที่กำลังคุ้มครองเซิร์ฟเวอร์:</h4>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.65rem;" id="secModulesList">
+            <div class="sec-modules-grid" id="secModulesList">
               <!-- Rendered by app.js -->
             </div>
           </div>
@@ -666,7 +666,7 @@
                 🗑️ ล้างประวัติ
               </button>
             </div>
-            <div style="overflow-x: auto; max-height: 260px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+            <div class="table-responsive" style="max-height: 260px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
               <table class="admin-table" style="font-size: 0.82rem; margin: 0;">
                 <thead>
                   <tr>
@@ -781,7 +781,7 @@
       </div>
       <div class="modal-content">
         <form id="formAddProduct">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+          <div class="grid-responsive-2col">
             <div class="form-group">
               <label class="form-label">ชื่อสคริปต์ (Name)</label>
               <input type="text" class="form-control" id="adminProdName" placeholder="เช่น ระบบแต่งรถ Los Santos Custom"

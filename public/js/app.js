@@ -410,7 +410,7 @@ async function viewProductDetail(productId) {
   if (!modalBody) return;
 
   modalBody.innerHTML = `
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.25rem;">
+    <div class="product-modal-grid">
       <div>
         <img src="${p.image}" style="width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border-medium);" alt="${p.name}">
         <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; font-size: 0.8rem; color: var(--text-dim);">

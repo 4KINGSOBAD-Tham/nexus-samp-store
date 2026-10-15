@@ -4,10 +4,26 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const fs = require('fs');
 const { db, initDatabase } = require('./database');
 const { generatePromptPayQR, generateBankQR } = require('./promptpay');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+// Directory for product image attachments
+const uploadsDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const prodStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, 'cover-' + Date.now() + '-' + Math.round(Math.random() * 1e6) + ext);
+  }
+});
+const uploadProductCover = multer({ storage: prodStorage, limits: { fileSize: 15 * 1024 * 1024 } });
 
 // Initialize database
 initDatabase();
@@ -767,7 +783,7 @@ app.get('/api/admin/products', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-app.post('/api/admin/products', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/products', authenticateToken, requireAdmin, uploadProductCover.single('imageFile'), (req, res) => {
   try {
     const {
       name, slug, category_slug, price, original_price, badge, samp_version,
@@ -775,11 +791,19 @@ app.post('/api/admin/products', authenticateToken, requireAdmin, (req, res) => {
       image, file_url, is_featured
     } = req.body;
 
-    if (!name || !price || !category_slug) {
-      return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลสินค้าสำคัญให้ครบ' });
+    if (!name || !price) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อสคริปต์และราคาให้ครบถ้วน' });
     }
 
-    const finalSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    let finalImage = '/assets/roleplay.jpg';
+    if (req.file) {
+      finalImage = '/uploads/' + req.file.filename;
+    } else if (image) {
+      finalImage = image;
+    }
+
+    const finalCat = category_slug || 'script';
+    const finalSlug = slug || (name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString(36));
 
     const insert = db.prepare(`
       INSERT INTO products (
@@ -792,7 +816,7 @@ app.post('/api/admin/products', authenticateToken, requireAdmin, (req, res) => {
     const result = insert.run(
       name,
       finalSlug,
-      category_slug,
+      finalCat,
       Number(price),
       original_price ? Number(original_price) : null,
       badge || 'NEW',
@@ -802,18 +826,18 @@ app.post('/api/admin/products', authenticateToken, requireAdmin, (req, res) => {
       typeof features === 'string' ? features : JSON.stringify(features || []),
       typeof requirements === 'string' ? requirements : JSON.stringify(requirements || []),
       code_snippet || '',
-      image || '/assets/roleplay.jpg',
+      finalImage,
       file_url || 'https://github.com/samp-releases/demo-package.zip',
       is_featured ? 1 : 0
     );
 
-    res.json({ success: true, message: 'เพิ่มสินค้าใหม่เรียบร้อยแล้ว!', id: result.lastInsertRowid });
+    res.json({ success: true, message: 'เพิ่มสคริปต์ใหม่เรียบร้อยแล้ว!', id: result.lastInsertRowid, image: finalImage });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-app.put('/api/admin/products/:id', authenticateToken, requireAdmin, (req, res) => {
+app.put('/api/admin/products/:id', authenticateToken, requireAdmin, uploadProductCover.single('imageFile'), (req, res) => {
   try {
     const id = req.params.id;
     const {
@@ -821,6 +845,20 @@ app.put('/api/admin/products/:id', authenticateToken, requireAdmin, (req, res) =
       short_desc, description, features, requirements, code_snippet,
       image, file_url, is_featured
     } = req.body;
+
+    const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'ไม่พบสินค้า' });
+    }
+
+    let finalImage = existing.image;
+    if (req.file) {
+      finalImage = '/uploads/' + req.file.filename;
+    } else if (image) {
+      finalImage = image;
+    }
+
+    const finalCat = category_slug || existing.category_slug || 'script';
 
     db.prepare(`
       UPDATE products SET
@@ -830,20 +868,20 @@ app.put('/api/admin/products/:id', authenticateToken, requireAdmin, (req, res) =
         file_url = ?, is_featured = ?
       WHERE id = ?
     `).run(
-      name,
-      category_slug,
-      Number(price),
-      original_price ? Number(original_price) : null,
-      badge,
-      samp_version,
-      short_desc,
-      description,
-      typeof features === 'string' ? features : JSON.stringify(features || []),
-      typeof requirements === 'string' ? requirements : JSON.stringify(requirements || []),
-      code_snippet,
-      image,
-      file_url,
-      is_featured ? 1 : 0,
+      name || existing.name,
+      finalCat,
+      price ? Number(price) : existing.price,
+      original_price !== undefined ? (original_price ? Number(original_price) : null) : existing.original_price,
+      badge || existing.badge,
+      samp_version || existing.samp_version,
+      short_desc !== undefined ? short_desc : existing.short_desc,
+      description !== undefined ? description : existing.description,
+      features ? (typeof features === 'string' ? features : JSON.stringify(features)) : existing.features,
+      requirements ? (typeof requirements === 'string' ? requirements : JSON.stringify(requirements)) : existing.requirements,
+      code_snippet !== undefined ? code_snippet : existing.code_snippet,
+      finalImage,
+      file_url || existing.file_url,
+      is_featured !== undefined ? (is_featured ? 1 : 0) : existing.is_featured,
       id
     );
 

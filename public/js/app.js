@@ -86,7 +86,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupAdminForm();
 
   await checkAuth();
-  await loadCategories();
   await loadProducts();
 
   const hash = window.location.hash.replace('#', '') || 'store';
@@ -315,43 +314,8 @@ function openAuthModal(mode = 'login') {
 // ----------------------------------------------------
 // Store & Products System
 // ----------------------------------------------------
-async function loadCategories() {
-  const res = await api('/api/categories');
-  if (res.success) {
-    state.categories = res.categories;
-    renderCategories();
-  }
-}
-
-function renderCategories() {
-  const container = document.getElementById('homeCategories');
-  if (!container) return;
-
-  let html = `
-    <button class="cat-btn ${state.currentCategory === 'all' ? 'active' : ''}" onclick="filterCategory('all')">
-      ทั้งหมด (${state.products.length})
-    </button>
-  `;
-
-  state.categories.forEach(cat => {
-    html += `
-      <button class="cat-btn ${state.currentCategory === cat.slug ? 'active' : ''}" onclick="filterCategory('${cat.slug}')">
-        ${cat.name.split(' ')[0]} (${cat.product_count})
-      </button>
-    `;
-  });
-
-  container.innerHTML = html;
-}
-
-function filterCategory(slug) {
-  state.currentCategory = slug;
-  renderCategories();
-  loadProducts();
-}
-
 async function loadProducts() {
-  let url = `/api/products?category=${state.currentCategory}&sort=${state.sortBy}`;
+  let url = `/api/products?sort=${state.sortBy}`;
   if (state.searchQuery) {
     url += `&search=${encodeURIComponent(state.searchQuery)}`;
   }
@@ -372,10 +336,13 @@ function renderProducts() {
 
   if (state.products.length === 0) {
     grid.innerHTML = `
-      <div style="grid-column: 1/-1; text-align: center; padding: 4rem 1rem; color: var(--text-dim);">
-        <h3 style="color: var(--text-muted); margin-bottom: 0.5rem;">ไม่พบสคริปต์ที่ค้นหา</h3>
-        <p>ลองค้นหาด้วยคำอื่น หรือกดดูทุกหมวดหมู่</p>
-        <button class="btn btn-secondary btn-sm" style="margin-top: 1rem;" onclick="filterCategory('all')">แสดงสคริปต์ทั้งหมด</button>
+      <div style="grid-column: 1/-1; text-align: center; padding: 4.5rem 1.5rem; background: var(--bg-surface); border: 1px dashed var(--border-subtle); border-radius: var(--radius-md); margin-top: 1rem;">
+        <div style="font-size: 2.8rem; margin-bottom: 0.75rem;">📦</div>
+        <h3 style="color: #fff; font-size: 1.25rem; margin-bottom: 0.4rem;">ยังไม่มีสคริปต์ในร้าน</h3>
+        <p style="color: var(--text-muted); font-size: 0.88rem; max-width: 420px; margin: 0 auto 1.25rem;">
+          แอดมินสามารถเข้าสู่ระบบด้วยไอดีแอดมิน แล้วกดปุ่ม <b>"เพิ่มสคริปต์ใหม่"</b> เพื่อเริ่มลงขายระบบจริงได้ทันที
+        </p>
+        <button class="btn btn-primary" onclick="openAddProductModal()">➕ เพิ่มสคริปต์ใหม่</button>
       </div>
     `;
     return;
@@ -388,7 +355,6 @@ function renderProducts() {
         <div class="product-badge-pill">${p.samp_version || '0.3.7'}</div>
       </div>
       <div class="product-card-body">
-        <div class="product-card-cat">${p.category_slug}</div>
         <h3 class="product-card-title">${p.name}</h3>
         <p class="product-card-desc">${p.short_desc || ''}</p>
         <div class="product-card-footer">
@@ -430,7 +396,6 @@ async function viewProductDetail(productId) {
         </div>
       </div>
       <div>
-        <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600;">${p.category_slug}</div>
         <h2 style="font-size: 1.35rem; margin: 0.25rem 0 0.5rem; color: #fff;">${p.name}</h2>
         <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1.25rem; line-height: 1.5;">${p.description || p.short_desc}</p>
         
@@ -893,10 +858,12 @@ async function loadUserOrders() {
 // ----------------------------------------------------
 // ADMIN SCRIPT MANAGEMENT (ADD, DELETE, MANAGE)
 // ----------------------------------------------------
+// Admin Products & Settings Handlers
+// ----------------------------------------------------
 async function loadAdminProducts() {
   if (!state.user || state.user.role !== 'admin') {
     const tbody = document.getElementById('adminProductsTbody');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem;">เฉพาะแอดมินเท่านั้นที่สามารถเข้าถึงได้</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 2rem;">เฉพาะแอดมินเท่านั้นที่สามารถเข้าถึงได้</td></tr>`;
     return;
   }
 
@@ -905,7 +872,7 @@ async function loadAdminProducts() {
   if (!tbody || !res.success) return;
 
   if (res.products.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 2rem;">ยังไม่มีสินค้าในระบบ</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 2rem;">ยังไม่มีสินค้าในระบบ</td></tr>`;
     return;
   }
 
@@ -921,7 +888,6 @@ async function loadAdminProducts() {
           </div>
         </div>
       </td>
-      <td><span style="color: var(--text-muted); font-size: 0.82rem;">${p.category_slug}</span></td>
       <td><strong style="color: var(--accent-emerald); font-family: var(--font-mono);">฿${p.price.toLocaleString()}</strong></td>
       <td><span style="color: var(--text-dim);">${p.sold_count} ชิ้น</span></td>
       <td style="text-align: right;">
@@ -944,7 +910,6 @@ async function adminDeleteProduct(id, name) {
     showToast(`ลบสคริปต์ "${name}" สำเร็จแล้ว`);
     loadAdminProducts();
     loadProducts();
-    loadCategories();
   } else {
     showToast(res.message, 'error');
   }
@@ -952,20 +917,33 @@ async function adminDeleteProduct(id, name) {
 
 // Open Add Product Modal
 function openAddProductModal() {
-  document.getElementById('formAddProduct').reset();
-  const customImgInput = document.getElementById('adminProdImageCustom');
-  if (customImgInput) customImgInput.style.display = 'none';
+  const form = document.getElementById('formAddProduct');
+  if (form) form.reset();
+  const previewWrap = document.getElementById('adminProdImagePreviewWrap');
+  if (previewWrap) previewWrap.style.display = 'none';
   openModal('addProductModal');
 }
 
 // Setup Admin Form Listener
 function setupAdminForm() {
-  // Toggle custom image input
-  const imgSelect = document.getElementById('adminProdImageSelect');
-  const customInput = document.getElementById('adminProdImageCustom');
-  if (imgSelect && customInput) {
-    imgSelect.addEventListener('change', () => {
-      customInput.style.display = imgSelect.value === 'custom' ? 'block' : 'none';
+  const prodFileInput = document.getElementById('adminProdImageFile');
+  const prodPreviewWrap = document.getElementById('adminProdImagePreviewWrap');
+  const prodPreview = document.getElementById('adminProdImagePreview');
+
+  // Thumbnail preview when selecting file
+  if (prodFileInput && prodPreviewWrap && prodPreview) {
+    prodFileInput.addEventListener('change', () => {
+      const file = prodFileInput.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          prodPreview.src = e.target.result;
+          prodPreviewWrap.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      } else {
+        prodPreviewWrap.style.display = 'none';
+      }
     });
   }
 
@@ -975,41 +953,51 @@ function setupAdminForm() {
     formAdd.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      let finalImage = imgSelect ? imgSelect.value : '/assets/roleplay.jpg';
-      if (finalImage === 'custom' && customInput && customInput.value.trim()) {
-        finalImage = customInput.value.trim();
+      const file = prodFileInput ? prodFileInput.files[0] : null;
+      if (!file) {
+        showToast('กรุณาแนบรูปภาพหน้าปกของสคริปต์ก่อนบันทึก', 'error');
+        return;
       }
 
-      const productData = {
-        name: document.getElementById('adminProdName').value.trim(),
-        category_slug: document.getElementById('adminProdCat').value,
-        price: Number(document.getElementById('adminProdPrice').value),
-        samp_version: document.getElementById('adminProdVersion').value.trim() || '0.3.7-R2',
-        short_desc: document.getElementById('adminProdShortDesc').value.trim(),
-        description: document.getElementById('adminProdDesc').value.trim(),
-        image: finalImage,
-        file_url: document.getElementById('adminProdFileUrl').value.trim(),
-        features: [
-          'ระบบทำงานได้ 100% ไม่มี Error หรือ Crash',
-          'รองรับทั้ง SA-MP 0.3.7 และ open.mp',
-          'มีเอกสารสอนติดตั้งภาษาไทยและไฟล์ Database พร้อมใช้งาน'
-        ],
-        requirements: ['SA-MP Server 0.3.7-R2', 'Streamer Plugin']
-      };
+      const submitBtn = formAdd.querySelector('button[type="submit"]');
+      const originalText = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '⏳ กำลังอัปโหลดภาพและบันทึกข้อมูล...';
 
-      const res = await api('/api/admin/products', {
-        method: 'POST',
-        body: JSON.stringify(productData)
-      });
+      const formData = new FormData();
+      formData.append('name', document.getElementById('adminProdName').value.trim());
+      formData.append('price', document.getElementById('adminProdPrice').value);
+      formData.append('samp_version', document.getElementById('adminProdVersion').value.trim() || '0.3.7-R2');
+      formData.append('file_url', document.getElementById('adminProdFileUrl').value.trim());
+      formData.append('short_desc', document.getElementById('adminProdShortDesc').value.trim());
+      formData.append('description', document.getElementById('adminProdDesc').value.trim());
+      formData.append('imageFile', file);
 
-      if (res.success) {
-        showToast('เพิ่มสคริปต์ใหม่ลงร้าน Nexus สำเร็จ!');
-        closeModal('addProductModal');
-        loadAdminProducts();
-        loadProducts();
-        loadCategories();
-      } else {
-        showToast(res.message, 'error');
+      try {
+        const res = await fetch('/api/admin/products', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${state.token}`
+          },
+          body: formData
+        });
+
+        const data = await res.json();
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+
+        if (data.success) {
+          showToast('เพิ่มสคริปต์ใหม่ลงร้าน Nexus สำเร็จ!');
+          closeModal('addProductModal');
+          loadAdminProducts();
+          loadProducts();
+        } else {
+          showToast(data.message || 'เกิดข้อผิดพลาดในการบันทึก', 'error');
+        }
+      } catch (err) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+        showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
       }
     });
   }

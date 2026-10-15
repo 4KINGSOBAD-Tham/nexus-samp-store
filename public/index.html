@@ -92,7 +92,7 @@
             </p>
             <div class="hero-stats-row">
               <div class="hero-stat-item">
-                <strong id="statProdCount">8</strong>
+                <strong id="statProdCount">0</strong>
                 <span>สคริปต์พร้อมใช้งาน</span>
               </div>
               <div class="hero-stat-item">
@@ -110,10 +110,12 @@
 
       <!-- Store Catalog Section -->
       <div class="container">
-        <!-- Toolbar: Categories, Search, Sort -->
+        <!-- Toolbar: Title, Search, Sort -->
         <div class="store-toolbar">
-          <div class="cat-pills" id="homeCategories">
-            <!-- Rendered by app.js -->
+          <div>
+            <h2 style="font-size: 1.25rem; font-weight: 700; color: #fff; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+              <span>📦</span> รายการสคริปต์ทั้งหมด
+            </h2>
           </div>
 
           <div class="search-sort-group">
@@ -267,7 +269,6 @@
               <tr>
                 <th style="width: 60px;">ID</th>
                 <th>สคริปต์</th>
-                <th>หมวดหมู่</th>
                 <th>ราคา (บาท)</th>
                 <th>ยอดขาย</th>
                 <th style="text-align: right; width: 140px;">การจัดการ</th>
@@ -351,15 +352,11 @@
         <form id="formLogin">
           <div class="form-group">
             <label class="form-label">ชื่อผู้ใช้ (Username)</label>
-            <input type="text" class="form-control" id="loginUsername" placeholder="เช่น admin หรือ player1" required>
+            <input type="text" class="form-control" id="loginUsername" placeholder="กรอกชื่อผู้ใช้ของคุณ" required>
           </div>
           <div class="form-group">
             <label class="form-label">รหัสผ่าน (Password)</label>
             <input type="password" class="form-control" id="loginPassword" placeholder="••••••••" required>
-          </div>
-          <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 1rem;">
-            🔑 แอดมิน: <code>admin</code> / รหัสผ่าน <code>admin1234</code><br>
-            🎮 ผู้เล่นทดสอบ: <code>player1</code> / รหัสผ่าน <code>123456</code> (มียอดเงิน ฿500)
           </div>
           <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">เข้าสู่ระบบ</button>
         </form>
@@ -412,23 +409,17 @@
                 required>
             </div>
             <div class="form-group">
-              <label class="form-label">หมวดหมู่ (Category)</label>
-              <select class="form-control" id="adminProdCat">
-                <option value="gamemode">โหมดเกมเต็มระบบ (Gamemodes)</option>
-                <option value="inventory-ui">กระเป๋า & UI Textdraw</option>
-                <option value="turf-gang">ระบบแก๊งค์ & ยึดจุด (Turf)</option>
-                <option value="anticheat-launcher">ระบบกันแฮก & Launcher</option>
-                <option value="jobs-system">ระบบงาน & เศรษฐกิจ (Jobs)</option>
-                <option value="housing-biz">ระบบบ้าน & ธุรกิจ (Housing)</option>
-              </select>
-            </div>
-            <div class="form-group">
               <label class="form-label">ราคาขาย (บาท)</label>
               <input type="number" class="form-control" id="adminProdPrice" placeholder="250" required>
             </div>
             <div class="form-group">
               <label class="form-label">เวอร์ชัน SA-MP</label>
               <input type="text" class="form-control" id="adminProdVersion" value="0.3.7-R2 / open.mp">
+            </div>
+            <div class="form-group">
+              <label class="form-label">ลิงก์ดาวน์โหลดไฟล์ (.ZIP หรือ Google Drive)</label>
+              <input type="text" class="form-control" id="adminProdFileUrl"
+                value="https://github.com/samp-releases/script.zip" required>
             </div>
           </div>
 
@@ -444,23 +435,13 @@
               placeholder="ระบุฟังก์ชันและวิธีการใช้งาน"></textarea>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
-            <div class="form-group">
-              <label class="form-label">รูปภาพหน้าปก (เลือกภาพสำเร็จรูปหรือใส่ URL)</label>
-              <select class="form-control" id="adminProdImageSelect">
-                <option value="/assets/roleplay.jpg">รูปสไตล์ Roleplay / เซิร์ฟเวอร์</option>
-                <option value="/assets/inventory.jpg">รูปสไตล์ Textdraw / กระเป๋า</option>
-                <option value="/assets/turf.jpg">รูปสไตล์ Gangwar / ชิงพื้นที่</option>
-                <option value="/assets/anticheat.jpg">รูปสไตล์ Security / Launcher</option>
-                <option value="custom">ระบุลิงก์รูปเอง (Custom URL)</option>
-              </select>
-              <input type="text" class="form-control" id="adminProdImageCustom"
-                style="display: none; margin-top: 0.35rem;" placeholder="https://...">
-            </div>
-            <div class="form-group">
-              <label class="form-label">ลิงก์ดาวน์โหลดไฟล์ (.ZIP หรือ Google Drive)</label>
-              <input type="text" class="form-control" id="adminProdFileUrl"
-                value="https://github.com/samp-releases/script.zip" required>
+          <!-- Attach Image File -->
+          <div class="form-group">
+            <label class="form-label">📎 แนบรูปภาพหน้าปก (เลือกไฟล์รูปภาพจากเครื่อง)</label>
+            <input type="file" class="form-control" id="adminProdImageFile" accept="image/*" required>
+            <div id="adminProdImagePreviewWrap" style="display: none; margin-top: 0.75rem; text-align: center; background: var(--bg-input); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px dashed var(--border-medium);">
+              <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.5rem;">ตัวอย่างภาพหน้าปกที่จะแสดงในหน้าร้าน:</div>
+              <img id="adminProdImagePreview" style="max-height: 180px; max-width: 100%; border-radius: 6px; border: 1px solid var(--border-medium); object-fit: contain;">
             </div>
           </div>
 
@@ -485,7 +466,7 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=2.5"></script>
+  <script src="/js/app.js?v=2.6"></script>
 </body>
 
 </html>

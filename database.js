@@ -1,5 +1,4 @@
 require('dotenv').config();
-const Database = require('better-sqlite3');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const path = require('path');
@@ -18,9 +17,14 @@ if (isPostgres) {
   });
 } else {
   console.log('📁 Database: Running with local SQLite (store.db)');
-  const dbPath = path.join(__dirname, 'store.db');
-  sqliteDb = new Database(dbPath);
-  sqliteDb.pragma('foreign_keys = ON');
+  try {
+    const Database = require('better-sqlite3');
+    const dbPath = path.join(__dirname, 'store.db');
+    sqliteDb = new Database(dbPath);
+    sqliteDb.pragma('foreign_keys = ON');
+  } catch (err) {
+    console.warn('⚠️ SQLite module could not load:', err.message);
+  }
 }
 
 function toPgSql(sql) {

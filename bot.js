@@ -239,17 +239,94 @@ client.on('interactionCreate', async (interaction) => {
 client.on('guildMemberAdd', async (member) => {
   console.log(`👋 [Discord Bot] มีสมาชิกใหม่เข้าเซิร์ฟเวอร์: ${member.user.tag} (ID: ${member.id})`);
 
-  // ส่ง DM แนะนำให้ไปกดยืนยันตัวตนที่ห้อง #ยืนยันตัวตน
+  const guild = member.guild;
+
+  // 1. ส่งข้อความต้อนรับลงห้อง #👋┃ยินดีต้อนรับ
+  try {
+    const welcomeChannel = guild.channels.cache.find(c => 
+      c.name.includes('ยินดีต้อนรับ') || c.name.includes('welcome')
+    );
+
+    const verifyChannel = guild.channels.cache.find(c => 
+      c.name.includes('ยืนยันตัวตน') || c.name.includes('verify')
+    );
+
+    if (welcomeChannel) {
+      const welcomeEmbed = new EmbedBuilder()
+        .setColor(0x10b981)
+        .setTitle(`🎉 ยินดีต้อนรับสู่ ${guild.name}!`)
+        .setDescription(
+          `สวัสดีคุณ <@${member.id}> (\`${member.user.tag}\`) ยินดีต้อนรับเข้าสู่คอมมูนิตี้ **Nexus SAMP Store** อย่างเป็นทางการครับ! 🎮✨\n\n` +
+          `📌 **เริ่มต้นใช้งาน:**\n` +
+          `• กรุณาไปที่ห้อง ${verifyChannel ? `<#${verifyChannel.id}>` : '`#✅┃ยืนยันตัวตน`'} เพื่อกดปุ่มรับยศสมาชิก\n` +
+          `• ชมเว็บสโตร์สคริปต์ได้ที่: https://nexus-samp-store-6f88.onrender.com\n` +
+          `• ติดต่อทีมงานได้ที่ห้อง <#1560559070308470839>`
+        )
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .addFields({
+          name: '👥 ลำดับสมาชิก',
+          value: `คุณเป็นสมาชิกคนที่ **#${guild.memberCount}** ของเรา`,
+          inline: true
+        })
+        .setImage('https://raw.githubusercontent.com/4KINGSOBAD-Tham/nexus-samp-store/main/public/assets/banner.jpg')
+        .setFooter({ text: 'Nexus SAMP Store • 24/7 Automated Delivery' })
+        .setTimestamp();
+
+      await welcomeChannel.send({
+        content: `👋 ยินดีต้อนรับคุณ <@${member.id}> เข้าสู่เซิร์ฟเวอร์ครับ!`,
+        embeds: [welcomeEmbed]
+      });
+    }
+  } catch (err) {
+    console.error('[Discord Bot] Error sending welcome message:', err);
+  }
+
+  // 2. ส่ง DM แนะนำแบบส่วนตัว
   try {
     const dmEmbed = new EmbedBuilder()
       .setColor(0x10b981)
-      .setTitle(`🎮 ยินดีต้อนรับสู่ ${member.guild.name}!`)
+      .setTitle(`🎮 ยินดีต้อนรับสู่ ${guild.name}!`)
       .setDescription(`สวัสดีคุณ **${member.user.username}** ขอบคุณที่เข้าร่วมเซิร์ฟเวอร์ดิสคอร์ดของเราครับ!\n\n📌 **เริ่มต้นใช้งาน:**\nกรุณาไปที่ห้อง **\`#✅┃ยืนยันตัวตน\`** แล้วกดปุ่มสีเขียว **"ยืนยันตัวตน"** เพื่อรับยศสมาชิกและปลดล็อกห้องทั้งหมดในร้านค้านะครับ 🎉\n\n🌐 เว็บไซต์ร้านค้า: https://nexus-samp-store-6f88.onrender.com`)
       .setFooter({ text: 'Nexus SAMP Store • 24/7 Automated Delivery' });
 
     await member.send({ embeds: [dmEmbed] });
   } catch (e) {
     // ผู้ใช้ปิด DM เป็นเรื่องปกติ
+  }
+});
+
+// ----------------------------------------------------
+// Event: Guild Member Remove (คนออกจากเซิร์ฟเวอร์)
+// ----------------------------------------------------
+client.on('guildMemberRemove', async (member) => {
+  console.log(`🚪 [Discord Bot] มีสมาชิกออกจากเซิร์ฟเวอร์: ${member.user.tag} (ID: ${member.id})`);
+
+  const guild = member.guild;
+
+  // ส่งแจ้งเตือนลงห้อง #🚪┃สมาชิกออก
+  try {
+    const leaveChannel = guild.channels.cache.find(c => 
+      c.name.includes('สมาชิกออก') || c.name.includes('leave') || c.name.includes('goodbye')
+    );
+
+    if (leaveChannel) {
+      const leaveEmbed = new EmbedBuilder()
+        .setColor(0xf43f5e)
+        .setTitle('🚪 สมาชิกออกจากเซิร์ฟเวอร์')
+        .setDescription(`**${member.user.tag}** (<@${member.id}>) ได้ออกจากเซิร์ฟเวอร์ไปแล้ว`)
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .addFields({
+          name: '👥 สมาชิกคงเหลือ',
+          value: `เหลือสมาชิกทั้งหมด **${guild.memberCount}** คน`,
+          inline: true
+        })
+        .setFooter({ text: 'Nexus SAMP Store • Member Activity Log' })
+        .setTimestamp();
+
+      await leaveChannel.send({ embeds: [leaveEmbed] });
+    }
+  } catch (err) {
+    console.error('[Discord Bot] Error sending leave message:', err);
   }
 });
 

@@ -377,6 +377,22 @@ async function startBot() {
     botDiagnostics.tokenPrefix = token.substring(0, 10);
     botDiagnostics.loginAttempted = true;
 
+    try {
+      const restRes = await fetch('https://discord.com/api/v10/users/@me', {
+        headers: { Authorization: `Bot ${token}` }
+      });
+      const restData = await restRes.json();
+      botDiagnostics.restCheck = { 
+        httpStatus: restRes.status, 
+        username: restData.username,
+        message: restData.message || 'OK'
+      };
+      console.log(`[Discord Bot REST Check] Status: ${restRes.status}, User: ${restData.username || restData.message}`);
+    } catch(fetchErr) {
+      botDiagnostics.restCheck = { error: fetchErr.message };
+      console.error('[Discord Bot REST Check Error]', fetchErr.message);
+    }
+
     console.log(`[Discord Bot] กำลังเชื่อมต่อ Discord Gateway... (Token prefix: ${token.substring(0, 10)}...)`);
     client.login(token).then(() => {
       botDiagnostics.loginSuccess = true;

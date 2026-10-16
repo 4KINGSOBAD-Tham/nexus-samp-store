@@ -737,14 +737,14 @@ app.post('/api/topup/verify-slip', authenticateToken, slipLimiter, upload.single
 
     const updatedUser = await db.get('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?', [req.user.id]);
 
-    discord.notifyTopup({
+    await discord.notifyTopup({
       username: updatedUser.username,
       amount: actualAmount,
       bonus: finalBonus,
       method: 'PromptPay / SCB (สแกนสลิปจริง)',
       reference: transRef,
       new_balance: updatedUser.balance
-    });
+    }).catch(e => console.warn('Discord topup notify error:', e.message));
 
     res.json({
       success: true,
@@ -881,13 +881,13 @@ app.post('/api/orders/checkout', authenticateToken, async (req, res) => {
 
     const updatedUser = await db.get('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?', [req.user.id]);
 
-    discord.notifyOrder({
+    await discord.notifyOrder({
       product_name: product.name,
       username: req.user.username,
       price: prodPrice,
       samp_version: product.samp_version,
       license_key: licenseKey
-    });
+    }).catch(e => console.warn('Discord order notify error:', e.message));
 
     res.json({
       success: true,
@@ -1062,17 +1062,17 @@ app.post('/api/seller/products', authenticateToken, uploadProductCover.single('i
       file_url || 'https://github.com/samp-releases/demo-package.zip'
     ]);
 
-    res.json({
-      success: true,
-      message: 'ส่งสคริปต์เข้าสู่ระบบฝากขายเรียบร้อยแล้ว! แอดมินจะทำการตรวจสอบความปลอดภัยก่อนอนุมัติขึ้นหน้าร้าน',
-      id: result.lastInsertRowid
-    });
-
-    discord.notifyCreatorSubmission({
+    await discord.notifyCreatorSubmission({
       name,
       creator_name: req.user.username,
       price: numPrice,
       file_url: file_url || 'https://github.com/samp-releases/demo-package.zip'
+    }).catch(e => console.warn('Discord creator notify error:', e.message));
+
+    res.json({
+      success: true,
+      message: 'ส่งสคริปต์เข้าสู่ระบบฝากขายเรียบร้อยแล้ว! แอดมินจะทำการตรวจสอบความปลอดภัยก่อนอนุมัติขึ้นหน้าร้าน',
+      id: result.lastInsertRowid
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -1149,19 +1149,19 @@ app.post('/api/seller/withdraw', authenticateToken, async (req, res) => {
 
     const updatedUser = await db.get('SELECT COALESCE(seller_balance, 0) as seller_balance FROM users WHERE id = ?', [req.user.id]);
 
-    res.json({
-      success: true,
-      message: `ส่งคำขอถอนเงิน ฿${numAmount.toLocaleString()} เรียบร้อยแล้ว! แอดมินจะตรวจสอบและโอนเงินเข้าบัญชีของคุณโดยเร็วที่สุด`,
-      withdrawalId: result.lastInsertRowid,
-      newSellerBalance: Number(updatedUser.seller_balance || 0)
-    });
-
-    discord.notifyWithdrawalRequest({
+    await discord.notifyWithdrawalRequest({
       username: req.user.username,
       amount: numAmount,
       bank_name: bank_name.trim(),
       account_number: account_number.trim(),
       account_name: account_name.trim()
+    }).catch(e => console.warn('Discord withdrawal notify error:', e.message));
+
+    res.json({
+      success: true,
+      message: `ส่งคำขอถอนเงิน ฿${numAmount.toLocaleString()} เรียบร้อยแล้ว! แอดมินจะตรวจสอบและโอนเงินเข้าบัญชีของคุณโดยเร็วที่สุด`,
+      withdrawalId: result.lastInsertRowid,
+      newSellerBalance: Number(updatedUser.seller_balance || 0)
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

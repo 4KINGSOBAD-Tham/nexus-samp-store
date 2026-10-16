@@ -110,7 +110,7 @@ async function notifyOrder(orderData) {
     }]
   };
 
-  sendToDiscord(url, payload);
+  return await sendToDiscord(url, payload);
 }
 
 /**
@@ -141,7 +141,7 @@ async function notifyTopup(topupData) {
     }]
   };
 
-  sendToDiscord(url, payload);
+  return await sendToDiscord(url, payload);
 }
 
 /**
@@ -169,7 +169,7 @@ async function notifyCreatorSubmission(scriptData) {
     }]
   };
 
-  sendToDiscord(url, payload);
+  return await sendToDiscord(url, payload);
 }
 
 /**
@@ -199,7 +199,7 @@ async function notifyWithdrawalRequest(withdrawData) {
     }]
   };
 
-  sendToDiscord(url, payload);
+  return await sendToDiscord(url, payload);
 }
 
 /**
@@ -227,7 +227,7 @@ async function notifySecurityAlert(threatData) {
     }]
   };
 
-  sendToDiscord(url, payload);
+  return await sendToDiscord(url, payload);
 }
 
 /**

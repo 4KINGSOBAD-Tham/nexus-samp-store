@@ -3,12 +3,8 @@
  * รันสคริปต์นี้เพื่อสร้างห้อง, หมวดหมู่, สิทธิ์ (Roles) และ Webhook เข้าเซิร์ฟเวอร์ Discord อัตโนมัติในคลิกเดียว!
  */
 
-const fs = require('fs');
-const path = require('path');
 const readline = require('readline');
-const sqlite3 = require('sqlite3').verbose();
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const db = require('./database');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -17,31 +13,22 @@ const rl = readline.createInterface({
 
 const question = (query) => new Promise((resolve) => rl.question(query, resolve));
 
-// Supabase client (if configured)
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
-const isSupabaseConfigured = supabaseUrl && supabaseKey && !supabaseUrl.includes('placeholder');
-const supabase = isSupabaseConfigured ? createClient(supabaseUrl, supabaseKey) : null;
-
-const dbPath = path.join(__dirname, 'store.db');
-const localDb = new sqlite3.Database(dbPath);
-
 async function saveSetting(key, value) {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      await supabase.from('settings').upsert({ key, value, updated_at: new Date().toISOString() });
-    } catch (e) {
-      console.warn('Supabase upsert warning:', e.message);
+  try {
+    if (db.isPostgres) {
+      await db.run(
+        'INSERT INTO site_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value',
+        [key, value || '']
+      );
+    } else {
+      await db.run(
+        'INSERT OR REPLACE INTO site_settings (key, value) VALUES (?, ?)',
+        [key, value || '']
+      );
     }
+  } catch (err) {
+    console.warn(`[Warning] Could not save setting ${key}:`, err.message);
   }
-  return new Promise((resolve) => {
-    localDb.run(
-      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
-      [key, value],
-      () => resolve()
-    );
-  });
 }
 
 // Discord REST API helper
@@ -68,7 +55,7 @@ async function discordApi(endpoint, token, method = 'GET', body = null) {
   return data;
 }
 
-// Server Structure Template
+// Server Structure Blueprint
 const BLUEPRINT = {
   roles: [
     { name: '👑 ผู้ดูแลระบบ (Owner/Admin)', color: 0xF43F5E, hoist: true, mentionable: true },
@@ -116,7 +103,7 @@ const BLUEPRINT = {
 };
 
 async function main() {
-  console.log('====================================================');
+  console.log('\n====================================================');
   console.log('  🚀 NEXUS SAMP STORE - DISCORD AUTO SETUP TOOL     ');
   console.log('  เครื่องมือสร้างห้อง, บทบาท และเชื่อมต่อเว็บฮุกอัตโนมัติ  ');
   console.log('====================================================\n');
@@ -126,7 +113,7 @@ async function main() {
     if (!botToken) {
       console.log('💡 วิธีเอา Bot Token:');
       console.log('  1. ไปที่ https://discord.com/developers/applications');
-      console.log('  2. สร้าง New Application -> ไปที่แท็บ "Bot" -> กด "Reset Token" แล้วคัดลอกมา');
+      console.log('  2. เข้าแอปของคุณ -> ไปที่แท็บ "Bot" -> กด "Reset Token" แล้วกด "Copy"');
       console.log('----------------------------------------------------');
       botToken = (await question('🔑 กรุณาวาง Discord Bot Token ของคุณ: ')).trim();
     }
@@ -134,33 +121,36 @@ async function main() {
     if (!botToken) {
       console.log('❌ ต้องระบุ Bot Token เพื่อดำเนินการต่อ');
       rl.close();
+      process.exit(0);
       return;
     }
 
     console.log('\n🔍 กำลังตรวจสอบ Bot Token...');
     const botUser = await discordApi('/users/@me', botToken);
-    console.log(`✅ เชื่อมต่อบอทสำเร็จ: ${botUser.username}#${botUser.discriminator} (ID: ${botUser.id})\n`);
+    console.log(`✅ เชื่อมต่อบอทสำเร็จ: ${botUser.username}#${botUser.discriminator || '0'} (ID: ${botUser.id})\n`);
 
     console.log('💡 วิธีเอา Server ID (Guild ID):');
-    console.log('  1. ใน Discord ไปที่ User Settings -> Advanced -> เปิด "Developer Mode"');
+    console.log('  1. ใน Discord ไปที่ User Settings (ฟันเฟือง ⚙️) -> Advanced -> เปิด "Developer Mode"');
     console.log('  2. คลิกขวาที่ไอคอนเซิร์ฟเวอร์ดิสคอร์ดของคุณ -> กด "Copy Server ID"');
     console.log('----------------------------------------------------');
-    const guildId = (await question('🏰 กรุณาวาง Server ID (Guild ID) ของเซิร์ฟเวอร์ที่คุณเชิญบอทเข้าแล้ว: ')).trim();
+    const guildId = (await question('🏰 กรุณาวาง Server ID ของเซิร์ฟเวอร์ที่คุณเชิญบอทเข้าแล้ว: ')).trim();
 
     if (!guildId) {
       console.log('❌ ต้องระบุ Server ID');
       rl.close();
+      process.exit(0);
       return;
     }
 
     console.log('\n🔍 กำลังดึงข้อมูลเซิร์ฟเวอร์...');
     const guild = await discordApi(`/guilds/${guildId}`, botToken);
-    console.log(`✅ พบเซิร์ฟเวอร์: "${guild.name}" (สมาชิก: ${guild.approximate_member_count || 'N/A'})\n`);
+    console.log(`✅ พบเซิร์ฟเวอร์: "${guild.name}"\n`);
 
     const confirm = await question(`⚠️ ยืนยันการสร้างหมวดหมู่, ห้อง และ Webhook เข้าเซิร์ฟเวอร์ "${guild.name}" หรือไม่? (y/n): `);
     if (confirm.toLowerCase() !== 'y') {
       console.log('ยกเลิกการทำงาน');
       rl.close();
+      process.exit(0);
       return;
     }
 
@@ -184,13 +174,12 @@ async function main() {
     let inviteChannelId = null;
 
     for (const cat of BLUEPRINT.categories) {
-      // 1. Create Category (type 4 = GUILD_CATEGORY)
       console.log(`\n📂 หมวดหมู่: ${cat.name}`);
       let catChannel = null;
       try {
         catChannel = await discordApi(`/guilds/${guildId}/channels`, botToken, 'POST', {
           name: cat.name,
-          type: 4
+          type: 4 // GUILD_CATEGORY
         });
       } catch (err) {
         console.log(`  ❌ สร้างหมวดหมู่ไม่สำเร็จ: ${err.message}`);
@@ -198,12 +187,11 @@ async function main() {
 
       const parentId = catChannel ? catChannel.id : null;
 
-      // 2. Create Channels inside category
       for (const ch of cat.channels) {
         try {
           const newCh = await discordApi(`/guilds/${guildId}/channels`, botToken, 'POST', {
             name: ch.name,
-            type: ch.type || 0, // 0 = GUILD_TEXT
+            type: ch.type || 0, // GUILD_TEXT
             parent_id: parentId,
             topic: ch.topic || ''
           });
@@ -213,7 +201,6 @@ async function main() {
             inviteChannelId = newCh.id;
           }
 
-          // If target for webhook, create webhook!
           if (ch.isWebhookTarget && !primaryWebhookUrl) {
             console.log(`  🤖 กำลังสร้าง Webhook อัตโนมัติในห้อง #${ch.name}...`);
             try {
@@ -232,13 +219,12 @@ async function main() {
       }
     }
 
-    // Create Instant Invite Link
     let inviteUrl = null;
     if (inviteChannelId) {
       try {
         const inv = await discordApi(`/channels/${inviteChannelId}/invites`, botToken, 'POST', {
-          max_age: 0, // unlimited
-          max_uses: 0 // unlimited
+          max_age: 0,
+          max_uses: 0
         });
         inviteUrl = `https://discord.gg/${inv.code}`;
         console.log(`\n🔗 สร้างลิงก์เชิญเซิร์ฟเวอร์แบบถาวรสำเร็จ: ${inviteUrl}`);
@@ -247,7 +233,6 @@ async function main() {
       }
     }
 
-    // Auto-save to Store Database
     if (primaryWebhookUrl) {
       console.log('\n💾 กำลังบันทึกการตั้งค่า Webhook เข้าฐานข้อมูลร้านค้าของคุณ...');
       await saveSetting('discord_webhook_main', primaryWebhookUrl);
@@ -275,7 +260,7 @@ async function main() {
     console.error('\n❌ เกิดข้อผิดพลาด:', err.message);
   } finally {
     rl.close();
-    localDb.close();
+    process.exit(0);
   }
 }
 

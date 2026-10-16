@@ -164,6 +164,52 @@ async function notifyCreatorSubmission(scriptData) {
   const url = await getWebhookUrl('creator');
   if (!url) return;
 
+  const fields = [
+    { name: '📦 ชื่อสคริปต์', value: `**${scriptData.name}**`, inline: false },
+    { name: '👤 ผู้ส่งขาย', value: `\`${scriptData.creator_name || 'Member'}\``, inline: true },
+    { name: '💵 ราคาที่ตั้งขาย', value: `**฿${Number(scriptData.price).toLocaleString()} บาท** (ผู้ขายได้รับ 80%)`, inline: true }
+  ];
+
+  // 📂 File Location Field
+  if (scriptData.local_path && scriptData.local_path !== scriptData.file_url) {
+    fields.push({
+      name: '📁 ตำแหน่งไฟล์บนระบบเซิร์ฟเวอร์ (Server File Path)',
+      value: `\`${scriptData.local_path}\`\n[🔗 คลิกดาวน์โหลดไฟล์ผ่านเว็บ](${scriptData.file_url})`,
+      inline: false
+    });
+  } else {
+    fields.push({
+      name: '📁 ลิงก์ดาวน์โหลดไฟล์ (Download URL)',
+      value: `[🔗 คลิกเพื่อดาวน์โหลดไฟล์ไปตรวจสอบ](${scriptData.file_url})`,
+      inline: false
+    });
+  }
+
+  // 🛡️ Security Audit & Internal File Paths
+  let secDetails = [];
+  if (scriptData.security_summary) {
+    secDetails.push(scriptData.security_summary);
+  }
+  if (scriptData.server_executables) {
+    secDetails.push(`• 🖥️ ตำแหน่งตัวรันเซิร์ฟเวอร์: \`${scriptData.server_executables}\``);
+  }
+  if (scriptData.plugins) {
+    secDetails.push(`• 🔌 ตำแหน่งปลั๊กอิน: \`${scriptData.plugins}\``);
+  }
+  if (scriptData.warnings) {
+    secDetails.push(`• ⚠️ รายการข้อควรระวัง:\n${scriptData.warnings}`);
+  }
+  if (scriptData.virustotal_url) {
+    secDetails.push(`• 🌐 [คลิกดูผลสแกน VirusTotal](${scriptData.virustotal_url})`);
+  }
+
+  const finalSecValue = secDetails.join('\n');
+  fields.push({
+    name: '🛡️ รายงานความปลอดภัย (Security Audit)',
+    value: finalSecValue.length > 1024 ? finalSecValue.substring(0, 1020) + '...' : (finalSecValue || '🟢 ผ่านการสแกนความปลอดภัยเบื้องต้น'),
+    inline: false
+  });
+
   const payload = {
     username: 'Nexus Creator Bot',
     avatar_url: 'https://raw.githubusercontent.com/4KINGSOBAD-Tham/nexus-samp-store/main/public/assets/logo.jpg',
@@ -171,17 +217,7 @@ async function notifyCreatorSubmission(scriptData) {
       title: '💼 สมาชิกส่งสคริปต์มาฝากขายใหม่ (Pending Review)',
       color: COLORS.CREATOR_NEW,
       description: `มีสมาชิกส่งสคริปต์มาลงหน้าร้าน **กรุณาตรวจสอบความปลอดภัยของไฟล์ก่อนอนุมัติ**`,
-      fields: [
-        { name: '📦 ชื่อสคริปต์', value: `**${scriptData.name}**`, inline: false },
-        { name: '👤 ผู้ส่งขาย', value: `\`${scriptData.creator_name || 'Member'}\``, inline: true },
-        { name: '💵 ราคาที่ตั้งขาย', value: `**฿${Number(scriptData.price).toLocaleString()} บาท** (ผู้ขายได้รับ 80%)`, inline: true },
-        { 
-          name: '🛡️ รายงานความปลอดภัย (Security Audit)', 
-          value: `${scriptData.security_summary || '🟢 ผ่านการสแกนความปลอดภัยเบื้องต้น'}${scriptData.server_executables ? `\n• ตัวรันเซิร์ฟเวอร์: \`${scriptData.server_executables}\`` : ''}${scriptData.virustotal_url ? `\n• [คลิกดูรายงาน VirusTotal](${scriptData.virustotal_url})` : ''}`, 
-          inline: false 
-        },
-        { name: '📁 ลิงก์ตรวจสอบไฟล์', value: `[คลิกเพื่อดาวน์โหลดไฟล์ไปตรวจสอบ](${scriptData.file_url})`, inline: false }
-      ],
+      fields,
       footer: { text: 'Nexus Marketplace • Creator Hub' },
       timestamp: new Date().toISOString()
     }]

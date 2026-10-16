@@ -116,7 +116,7 @@ async function scanZipArchiveBuffer(zipBuffer) {
         if (outerExt === '.exe' || outerExt === '.bat' || outerExt === '.scr') {
           report.isClean = false;
           report.riskLevel = 'danger';
-          report.blockedFiles.push(`${fileName} (ตรวจพบนามสกุลซ้อนซ่อนมัลแวร์: ${innerExt}${outerExt})`);
+          report.blockedFiles.push(`📂 ตำแหน่งใน ZIP: "${fullPath}" (ตรวจพบนามสกุลซ้อนซ่อนมัลแวร์: ${innerExt}${outerExt})`);
         }
       }
 
@@ -124,7 +124,7 @@ async function scanZipArchiveBuffer(zipBuffer) {
       if (DANGEROUS_EXTENSIONS.includes(ext)) {
         report.isClean = false;
         report.riskLevel = 'danger';
-        report.blockedFiles.push(`${fileName} (ไฟล์สคริปต์สุ่มเสี่ยงประเภท ${ext.toUpperCase()} ซึ่งไม่อนุญาตในระบบ)`);
+        report.blockedFiles.push(`📂 ตำแหน่งใน ZIP: "${fullPath}" (ไฟล์อันตรายประเภท ${ext.toUpperCase()})`);
       }
 
       // 3. Inspect .EXE Executables
@@ -133,19 +133,20 @@ async function scanZipArchiveBuffer(zipBuffer) {
         if (ALLOWED_EXECUTABLES.includes(lowerName)) {
           report.serverExecutables.push({
             name: fileName,
+            path: fullPath,
             type: 'Official Server Executable',
             size: entry.header.size
           });
         } else {
           // Unrecognized .exe
-          report.warnings.push(`พบไฟล์โปรแกรมรันไม่ทราบที่มา: "${fileName}" (แนะนำให้แอดมินเปิดสแกนด้วย VirusTotal ก่อนอนุมัติ)`);
+          report.warnings.push(`📂 ตำแหน่งใน ZIP: "${fullPath}" (ไฟล์โปรแกรมรันไม่ทราบที่มา แนะนำให้สแกน VirusTotal ก่อนอนุมัติ)`);
           if (report.riskLevel === 'clean') report.riskLevel = 'warning';
         }
       }
 
       // 4. Catalog Plugins (.dll / .so)
       if (ext === '.dll' || ext === '.so') {
-        report.plugins.push(fileName);
+        report.plugins.push(fullPath);
       }
 
       // 5. Scan .pwn / .inc Source Files for Backdoors
@@ -153,7 +154,7 @@ async function scanZipArchiveBuffer(zipBuffer) {
         report.pwnFilesCount++;
         try {
           const content = entry.getData().toString('utf8');
-          const foundIssues = scanPawnSourceCode(content, fileName);
+          const foundIssues = scanPawnSourceCode(content, fullPath);
           if (foundIssues.length > 0) {
             report.backdoors.push(...foundIssues);
             report.isClean = false;
@@ -166,14 +167,20 @@ async function scanZipArchiveBuffer(zipBuffer) {
     }
 
     // Determine final status
-    if (report.blockedFiles.length > 0 || report.backdoors.length > 0) {
+    const formattedThreats = [
+      ...report.blockedFiles,
+      ...report.backdoors.map(b => `📂 ตำแหน่งใน ZIP: "${b.file}" (บรรทัดที่ ${b.line}): ${b.threat} [โค้ด: ${b.snippet}]`)
+    ];
+
+    if (formattedThreats.length > 0) {
       report.isClean = false;
       report.riskLevel = 'danger';
-      report.summary = `❌ ตรวจพบความเสี่ยงสูง: พบไฟล์อันตรายหรือโค้ด Backdoor แฝงอยู่ในแพ็กเกจ (${report.blockedFiles.length + report.backdoors.length} รายการ)`;
+      report.threatsFormatted = formattedThreats;
+      report.summary = `❌ ตรวจพบความเสี่ยงสูง ${formattedThreats.length} จุด (ระบุตำแหน่งไฟล์และบรรทัดด้านล่าง)`;
     } else if (report.warnings.length > 0) {
       report.isClean = true;
       report.riskLevel = 'warning';
-      report.summary = `🟡 ผ่านการตรวจสอบเบื้องต้น (พบข้อสังเกต ${report.warnings.length} จุด: มีไฟล์โปรแกรมภายนอก)`;
+      report.summary = `🟡 ผ่านการตรวจสอบ (พบตัวรันภายนอก ${report.warnings.length} จุด: ${report.warnings.join(', ')})`;
     } else {
       report.isClean = true;
       report.riskLevel = 'clean';

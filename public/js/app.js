@@ -919,6 +919,11 @@ async function loadAdminProducts() {
           <div>
             <b style="color: #fff;">${p.name}</b>
             <div style="font-size: 0.78rem; color: var(--text-dim);">${p.samp_version || '0.3.7'}</div>
+            <div style="font-size: 0.73rem; margin-top: 3px;">
+              <a href="${p.file_url}" target="_blank" style="color: var(--accent-cyan); text-decoration: underline;" title="คลิกเพื่อดาวน์โหลดหรือตรวจสอบไฟล์">
+                📁 ตำแหน่งไฟล์: ${escapeHtml(p.file_url)}
+              </a>
+            </div>
           </div>
         </div>
       </td>
@@ -1365,7 +1370,13 @@ async function sendDiscordCreatorSubmissionFromClient(webhookUrl, scriptData) {
             { name: '👤 ผู้ส่งขาย', value: `\`${scriptData.creator_name || 'Member'}\``, inline: true },
             { name: '💵 ราคาที่ตั้งขาย', value: `**฿${Number(scriptData.price).toLocaleString()} บาท** (ผู้ขายได้รับ 80%)`, inline: true },
             { name: '🛡️ สถานะความปลอดภัย', value: scriptData.security_summary || '🟢 ผ่านการตรวจสแกนความปลอดภัยอัตโนมัติ (ไร้ Backdoor)', inline: false },
-            { name: '📁 ลิงก์ตรวจสอบไฟล์', value: `[คลิกเพื่อดาวน์โหลดไฟล์ไปตรวจสอบ](${scriptData.file_url})`, inline: false }
+            { 
+              name: '📁 ตำแหน่งไฟล์บนระบบ', 
+              value: scriptData.local_path && scriptData.local_path !== scriptData.file_url 
+                ? `\`${scriptData.local_path}\`\n[🔗 คลิกดาวน์โหลดผ่านเว็บ](${scriptData.file_url})` 
+                : `[🔗 คลิกเพื่อดาวน์โหลดไฟล์ไปตรวจสอบ](${scriptData.file_url})`, 
+              inline: false 
+            }
           ],
           footer: { text: 'Nexus Marketplace • Creator Hub' },
           timestamp: new Date().toISOString()
@@ -1628,6 +1639,11 @@ function setupCreatorMarketplace() {
         }
 
         if (data.success) {
+          let successAlertText = data.message;
+          if (data.fileLocation) {
+            successAlertText += '\n\n📂 ตำแหน่งไฟล์บนระบบเซิร์ฟเวอร์:\n' + data.fileLocation;
+          }
+          alert(successAlertText);
           showToast(data.message);
           formSubmit.reset();
           if (creatorPreviewWrap) creatorPreviewWrap.style.display = 'none';
@@ -1642,9 +1658,14 @@ function setupCreatorMarketplace() {
             sendDiscordCreatorSubmissionFromClient(data.webhookUrl, infoToSend);
           }
         } else {
-          let errorMsg = data.message;
+          let errorMsg = data.message || 'ตรวจพบความเสี่ยงในไฟล์สคริปต์';
           if (data.threats && data.threats.length > 0) {
-            errorMsg += '\n\nรายการที่พบ:\n• ' + data.threats.join('\n• ');
+            const threatFormattedList = data.threats.map(t => {
+              if (typeof t === 'string') return t;
+              if (t.file && t.line) return `📂 ตำแหน่งใน ZIP: "${t.file}" (บรรทัดที่ ${t.line}) -> ${t.threat || ''} ${t.snippet ? `[โค้ด: ${t.snippet}]` : ''}`;
+              return JSON.stringify(t);
+            });
+            errorMsg += '\n\n🔍 รายการตำแหน่งไฟล์ที่พบความเสี่ยง:\n• ' + threatFormattedList.join('\n• ');
           }
           alert('🚫 ตรวจพบความเสี่ยงความปลอดภัย:\n\n' + errorMsg);
           showToast(data.message, 'error');
@@ -1741,6 +1762,11 @@ async function loadCreatorDashboard() {
             <td>
               <div style="font-weight: 700; color: #fff;">${escapeHtml(p.name)}</div>
               <div style="font-size: 0.75rem; color: var(--text-dim);">${escapeHtml(p.category_slug)} • SA-MP ${escapeHtml(p.samp_version)}</div>
+              <div style="font-size: 0.73rem; margin-top: 3px;">
+                <a href="${p.file_url}" target="_blank" style="color: var(--accent-cyan); text-decoration: underline;" title="คลิกเพื่อเปิดดูไฟล์">
+                  📁 ตำแหน่งไฟล์: ${escapeHtml(p.file_url)}
+                </a>
+              </div>
             </td>
             <td style="font-family: var(--font-mono); font-weight: 700;">฿${Number(p.price).toLocaleString()}</td>
             <td style="font-family: var(--font-mono); color: var(--accent-emerald); font-weight: 700;">฿${creatorShare.toLocaleString()}</td>

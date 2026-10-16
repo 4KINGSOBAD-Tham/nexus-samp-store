@@ -1095,10 +1095,17 @@ app.post('/api/seller/products', authenticateToken, uploadCreatorProduct, async 
 
       // If dangerous threats or backdoors found: BLOCK IMMEDIATELY
       if (scanReport && !scanReport.isClean) {
+        const threatList = (scanReport.threatsFormatted && scanReport.threatsFormatted.length > 0)
+          ? scanReport.threatsFormatted
+          : [
+              ...(scanReport.blockedFiles || []),
+              ...(scanReport.backdoors || []).map(b => `📂 ตำแหน่งใน ZIP: "${b.file}" (บรรทัดที่ ${b.line}) -> ${b.threat}`)
+            ];
+
         return res.status(400).json({
           success: false,
           message: scanReport.summary,
-          threats: [...(scanReport.blockedFiles || []), ...(scanReport.backdoors || [])]
+          threats: threatList
         });
       }
 
@@ -1106,7 +1113,8 @@ app.post('/api/seller/products', authenticateToken, uploadCreatorProduct, async 
       if (!finalFileUrl) {
         const safePkgName = 'pkg-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
         try {
-          fs.writeFileSync(path.join(uploadsDir, safePkgName), scriptPackage.buffer);
+          const targetDiskPath = path.join(uploadsDir, safePkgName);
+          fs.writeFileSync(targetDiskPath, scriptPackage.buffer);
           finalFileUrl = '/uploads/' + safePkgName;
         } catch (e) {
           console.warn('Could not save script package to disk:', e.message);
@@ -1114,11 +1122,13 @@ app.post('/api/seller/products', authenticateToken, uploadCreatorProduct, async 
       }
     } else if (code_snippet) {
       // Scan code snippet for backdoor patterns
-      const issues = scanner.scanPawnSourceCode(code_snippet);
+      const issues = scanner.scanPawnSourceCode(code_snippet, 'ช่องกรอกโค้ดสคริปต์ (Code Snippet)');
       if (issues.length > 0) {
+        const threatDetails = issues.map(iss => `📂 ตำแหน่ง: ${iss.file} (บรรทัดที่ ${iss.line}) -> ${iss.threat}\n   [โค้ด: ${iss.snippet}]`);
         return res.status(400).json({
           success: false,
-          message: `🚫 ตรวจพบโค้ดที่มีความเสี่ยง Backdoor ในสคริปต์ (${issues[0].threat}) ที่บรรทัด ${issues[0].line}`
+          message: `🚫 ตรวจพบโค้ดที่มีความเสี่ยง Backdoor ในสคริปต์ (${issues.length} จุด)`,
+          threats: threatDetails
         });
       }
       scanReport = {
@@ -1161,14 +1171,27 @@ app.post('/api/seller/products', authenticateToken, uploadCreatorProduct, async 
       finalFileUrl || 'https://github.com/samp-releases/demo-package.zip'
     ]);
 
+    const localSavedPath = finalFileUrl.startsWith('/uploads/')
+      ? path.join(uploadsDir, path.basename(finalFileUrl))
+      : finalFileUrl;
+
     await discord.notifyCreatorSubmission({
       name,
       creator_name: req.user.username,
       price: numPrice,
       file_url: finalFileUrl || 'https://github.com/samp-releases/demo-package.zip',
+      local_path: localSavedPath,
       security_summary: scanReport ? scanReport.summary : '🟢 ตรวจสอบลิงก์ดาวน์โหลดเบื้องต้นเรียบร้อย',
       virustotal_url: scanReport ? scanReport.virustotalUrl : null,
-      server_executables: scanReport && scanReport.serverExecutables ? scanReport.serverExecutables.map(e => e.name).join(', ') : null
+      server_executables: scanReport && scanReport.serverExecutables && scanReport.serverExecutables.length > 0
+        ? scanReport.serverExecutables.map(e => `${e.path} (${(e.size / 1024 / 1024).toFixed(2)} MB)`).join(', ')
+        : null,
+      plugins: scanReport && scanReport.plugins && scanReport.plugins.length > 0
+        ? scanReport.plugins.slice(0, 5).join(', ') + (scanReport.plugins.length > 5 ? ` และอีก ${scanReport.plugins.length - 5} รายการ` : '')
+        : null,
+      warnings: scanReport && scanReport.warnings && scanReport.warnings.length > 0
+        ? scanReport.warnings.join('\n')
+        : null
     }).catch(e => console.warn('Discord creator notify error:', e.message));
 
     const mainWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_main']);
@@ -1180,11 +1203,13 @@ app.post('/api/seller/products', authenticateToken, uploadCreatorProduct, async 
       message: 'ส่งสคริปต์เข้าสู่ระบบฝากขายเรียบร้อยแล้ว! ' + (scanReport ? scanReport.summary : 'แอดมินจะทำการตรวจสอบความปลอดภัยก่อนอนุมัติ'),
       id: result.lastInsertRowid,
       webhookUrl: webhookToUse,
+      fileLocation: localSavedPath,
       creatorInfo: {
         name,
         creator_name: req.user.username,
         price: numPrice,
-        file_url: finalFileUrl || 'https://github.com/samp-releases/demo-package.zip'
+        file_url: finalFileUrl || 'https://github.com/samp-releases/demo-package.zip',
+        local_path: localSavedPath
       },
       securityScan: scanReport
     });

@@ -746,12 +746,24 @@ app.post('/api/topup/verify-slip', authenticateToken, slipLimiter, upload.single
       new_balance: updatedUser.balance
     }).catch(e => console.warn('Discord topup notify error:', e.message));
 
+    const mainWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_main']);
+    const topupWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_topup']);
+    const webhookToUse = (topupWebhook && topupWebhook.value) || (mainWebhook && mainWebhook.value) || '';
+
     res.json({
       success: true,
       message: `ตรวจสลิปผ่านฉลุย! ได้รับเครดิตจำนวน ${totalToAdd.toLocaleString()} บาท (ยอดโอน ${actualAmount} บาท + โบนัส ${finalBonus} บาท)`,
       newBalance: Number(updatedUser.balance || 0),
       user: updatedUser,
-      transRef
+      transRef,
+      webhookUrl: webhookToUse,
+      topupInfo: {
+        username: updatedUser.username,
+        amount: actualAmount,
+        bonus: finalBonus,
+        reference: transRef,
+        new_balance: updatedUser.balance
+      }
     });
   } catch (err) {
     console.error('Slip verification error:', err);
@@ -889,6 +901,10 @@ app.post('/api/orders/checkout', authenticateToken, async (req, res) => {
       license_key: licenseKey
     }).catch(e => console.warn('Discord order notify error:', e.message));
 
+    const mainWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_main']);
+    const ordersWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_orders']);
+    const webhookToUse = (ordersWebhook && ordersWebhook.value) || (mainWebhook && mainWebhook.value) || '';
+
     res.json({
       success: true,
       message: `สั่งซื้อระบบ ${product.name} สำเร็จ! ไฟล์พร้อมดาวน์โหลดและรับ License Key ทันที`,
@@ -902,7 +918,8 @@ app.post('/api/orders/checkout', authenticateToken, async (req, res) => {
         hwid_resets_left: 3
       },
       newBalance: Number(updatedUser.balance || 0),
-      user: updatedUser
+      user: updatedUser,
+      webhookUrl: webhookToUse
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

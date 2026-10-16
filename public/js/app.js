@@ -493,6 +493,10 @@ async function quickBuyProduct(productId) {
     renderUserNav();
     closeModal('productDetailModal');
     renderPurchaseSuccessModal(res.order);
+
+    if (res.webhookUrl && res.order) {
+      sendDiscordOrderFromClient(res.webhookUrl, res.order, state.user.username);
+    }
   } else {
     showToast(res.message, 'error');
   }
@@ -792,6 +796,10 @@ function renderPromptPayQR(data) {
         container.style.display = 'none';
         showToast(result.message);
         loadTopupHistory();
+
+        if (result.webhookUrl && result.topupInfo) {
+          sendDiscordTopupFromClient(result.webhookUrl, result.topupInfo);
+        }
       } else {
         showToast(result.message, 'error');
       }
@@ -1258,6 +1266,66 @@ async function testDiscordWebhook() {
       btn.innerHTML = originalText;
     }
     showToast('เกิดข้อผิดพลาดในการส่ง: ' + err.message, 'error');
+  }
+}
+
+async function sendDiscordOrderFromClient(webhookUrl, order, username) {
+  if (!webhookUrl || !webhookUrl.startsWith('https://discord.com/api/webhooks/')) return;
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'Nexus Store Bot',
+        avatar_url: 'https://raw.githubusercontent.com/4KINGSOBAD-Tham/nexus-samp-store/main/public/assets/logo.jpg',
+        embeds: [{
+          title: '📦 มีรายการสั่งซื้อใหม่เข้ามา! (New Order)',
+          color: 0x10b981,
+          description: `มีลูกค้าสั่งซื้อสคริปต์ **${order.product_name}** สำเร็จแล้ว!`,
+          fields: [
+            { name: '👤 ผู้ซื้อ', value: `\`${username}\``, inline: true },
+            { name: '💰 ยอดชำระ', value: `**฿${Number(order.price).toLocaleString()} บาท**`, inline: true },
+            { name: '🔑 License Key', value: `\`${order.license_key}\``, inline: false },
+            { name: '⚡ สถานะการส่งมอบ', value: '✅ จัดส่งไฟล์ดาวน์โหลดอัตโนมัติ 24 ชม. เรียบร้อย', inline: false }
+          ],
+          footer: { text: 'Nexus SAMP Store • Automated Delivery System' },
+          timestamp: new Date().toISOString()
+        }]
+      })
+    });
+  } catch (err) {
+    console.warn('Client Discord notify order error:', err);
+  }
+}
+
+async function sendDiscordTopupFromClient(webhookUrl, topup) {
+  if (!webhookUrl || !webhookUrl.startsWith('https://discord.com/api/webhooks/')) return;
+  try {
+    const bonusText = topup.bonus > 0 ? ` (+โบนัส ฿${topup.bonus})` : '';
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'Nexus Store Bot',
+        avatar_url: 'https://raw.githubusercontent.com/4KINGSOBAD-Tham/nexus-samp-store/main/public/assets/logo.jpg',
+        embeds: [{
+          title: '💳 การเติมเงินสำเร็จ (Topup Success)',
+          color: 0x06b6d4,
+          description: `ผู้ใช้ **${topup.username}** เติมพอยท์เข้าสู่ระบบเรียบร้อยแล้ว`,
+          fields: [
+            { name: '👤 สมาชิก', value: `\`${topup.username}\``, inline: true },
+            { name: '💵 ยอดเงิน', value: `**฿${Number(topup.amount).toLocaleString()} บาท**${bonusText}`, inline: true },
+            { name: '🏦 ช่องทาง', value: 'PromptPay / SCB (สแกนสลิปจริง)', inline: true },
+            { name: '🧾 รหัสอ้างอิง', value: `\`${topup.reference || '-'}\``, inline: true },
+            { name: '💰 ยอดเงินคงเหลือล่าสุด', value: `**฿${Number(topup.new_balance || 0).toLocaleString()}**`, inline: true }
+          ],
+          footer: { text: 'Nexus SAMP Store • Payment Gateway' },
+          timestamp: new Date().toISOString()
+        }]
+      })
+    });
+  } catch (err) {
+    console.warn('Client Discord notify topup error:', err);
   }
 }
 

@@ -11,6 +11,7 @@ const rateLimit = require('express-rate-limit');
 const { db, initDatabase } = require('./database');
 const { generatePromptPayQR, generateBankQR } = require('./promptpay');
 const multer = require('multer');
+const discord = require('./discord');
 
 // Strict Image File Filter
 const allowedImageTypes = [
@@ -109,6 +110,10 @@ async function logSecurityThreat(ip, method, endpoint, threatType, details, acti
       INSERT INTO security_logs (ip, method, endpoint, threat_type, details, action_taken)
       VALUES (?, ?, ?, ?, ?, ?)
     `, [ip || 'unknown', method || 'GET', endpoint || '/', threatType, String(details).substring(0, 500), action]);
+
+    if (threatType !== 'RATE_LIMIT_EXCEEDED') {
+      discord.notifySecurityAlert({ ip, method, endpoint, threat_type: threatType, details });
+    }
   } catch (err) {
     console.error('Failed to log security incident:', err.message);
   }
@@ -732,6 +737,15 @@ app.post('/api/topup/verify-slip', authenticateToken, slipLimiter, upload.single
 
     const updatedUser = await db.get('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?', [req.user.id]);
 
+    discord.notifyTopup({
+      username: updatedUser.username,
+      amount: actualAmount,
+      bonus: finalBonus,
+      method: 'PromptPay / SCB (สแกนสลิปจริง)',
+      reference: transRef,
+      new_balance: updatedUser.balance
+    });
+
     res.json({
       success: true,
       message: `ตรวจสลิปผ่านฉลุย! ได้รับเครดิตจำนวน ${totalToAdd.toLocaleString()} บาท (ยอดโอน ${actualAmount} บาท + โบนัส ${finalBonus} บาท)`,
@@ -866,6 +880,14 @@ app.post('/api/orders/checkout', authenticateToken, async (req, res) => {
     `, [orderCode, req.user.id, sellerId, product.id, product.name, prodPrice, adminFee, sellerEarnings, licenseKey]);
 
     const updatedUser = await db.get('SELECT id, username, email, role, balance, avatar FROM users WHERE id = ?', [req.user.id]);
+
+    discord.notifyOrder({
+      product_name: product.name,
+      username: req.user.username,
+      price: prodPrice,
+      samp_version: product.samp_version,
+      license_key: licenseKey
+    });
 
     res.json({
       success: true,
@@ -1045,6 +1067,13 @@ app.post('/api/seller/products', authenticateToken, uploadProductCover.single('i
       message: 'ส่งสคริปต์เข้าสู่ระบบฝากขายเรียบร้อยแล้ว! แอดมินจะทำการตรวจสอบความปลอดภัยก่อนอนุมัติขึ้นหน้าร้าน',
       id: result.lastInsertRowid
     });
+
+    discord.notifyCreatorSubmission({
+      name,
+      creator_name: req.user.username,
+      price: numPrice,
+      file_url: file_url || 'https://github.com/samp-releases/demo-package.zip'
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -1125,6 +1154,14 @@ app.post('/api/seller/withdraw', authenticateToken, async (req, res) => {
       message: `ส่งคำขอถอนเงิน ฿${numAmount.toLocaleString()} เรียบร้อยแล้ว! แอดมินจะตรวจสอบและโอนเงินเข้าบัญชีของคุณโดยเร็วที่สุด`,
       withdrawalId: result.lastInsertRowid,
       newSellerBalance: Number(updatedUser.seller_balance || 0)
+    });
+
+    discord.notifyWithdrawalRequest({
+      username: req.user.username,
+      amount: numAmount,
+      bank_name: bank_name.trim(),
+      account_number: account_number.trim(),
+      account_name: account_name.trim()
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -1445,6 +1482,89 @@ app.post('/api/admin/settings', authenticateToken, requireAdmin, async (req, res
     }
 
     res.json({ success: true, message: 'บันทึกการตั้งค่าร้านค้าเรียบร้อยแล้ว!' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ----------------------------------------------------
+// 🤖 Discord Integration & Webhook Endpoints
+// ----------------------------------------------------
+app.get('/api/admin/discord/settings', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const mainWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_main']);
+    const ordersWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_orders']);
+    const topupWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_topup']);
+    const creatorWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_creator']);
+    const inviteUrl = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_invite_url']);
+
+    res.json({
+      success: true,
+      settings: {
+        mainWebhook: mainWebhook?.value || '',
+        ordersWebhook: ordersWebhook?.value || '',
+        topupWebhook: topupWebhook?.value || '',
+        creatorWebhook: creatorWebhook?.value || '',
+        inviteUrl: inviteUrl?.value || 'https://discord.gg/samp-thailand'
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/discord/settings', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { mainWebhook, ordersWebhook, topupWebhook, creatorWebhook, inviteUrl } = req.body;
+
+    const upsertSetting = async (key, value) => {
+      if (db.isPostgres) {
+        await db.run('INSERT INTO site_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value', [key, value || '']);
+      } else {
+        await db.run('INSERT OR REPLACE INTO site_settings (key, value) VALUES (?, ?)', [key, value || '']);
+      }
+    };
+
+    if (mainWebhook !== undefined) await upsertSetting('discord_webhook_main', mainWebhook);
+    if (ordersWebhook !== undefined) await upsertSetting('discord_webhook_orders', ordersWebhook);
+    if (topupWebhook !== undefined) await upsertSetting('discord_webhook_topup', topupWebhook);
+    if (creatorWebhook !== undefined) await upsertSetting('discord_webhook_creator', creatorWebhook);
+    if (inviteUrl !== undefined) await upsertSetting('discord_invite_url', inviteUrl);
+
+    res.json({ success: true, message: 'บันทึกการตั้งค่า Discord เรียบร้อยแล้ว!' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/discord/test', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { webhookUrl } = req.body;
+    let urlToTest = webhookUrl;
+    if (!urlToTest) {
+      const saved = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_main']);
+      urlToTest = saved?.value;
+    }
+
+    if (!urlToTest || !urlToTest.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกหรือบันทึก Discord Webhook URL ก่อนกดทดสอบ' });
+    }
+
+    const result = await discord.sendTestNotification(urlToTest.trim());
+    if (result.success) {
+      res.json({ success: true, message: 'ยิงข้อความทดสอบเข้า Discord สำเร็จ! ลองเปิดดูในห้องดิสคอร์ดของคุณได้เลยครับ 🎉' });
+    } else {
+      res.status(400).json({ success: false, message: 'ส่งไม่สำเร็จ: ' + (result.message || 'โปรดตรวจสอบความถูกต้องของ Webhook URL') });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/discord/invite', async (req, res) => {
+  try {
+    const invite = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_invite_url']);
+    res.json({ success: true, url: invite?.value || 'https://discord.gg/samp-thailand' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

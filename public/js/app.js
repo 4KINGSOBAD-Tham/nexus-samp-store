@@ -80,6 +80,7 @@ function switchView(viewName) {
     loadAdminMarketplacePending();
     loadAdminWithdrawals();
     loadSecurityDashboard();
+    loadDiscordSettings();
   }
 }
 
@@ -90,6 +91,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupTopup();
   setupAdminForm();
   setupCreatorMarketplace();
+
+  loadPublicDiscordInvite();
 
   await checkAuth();
   await loadProducts();
@@ -1102,6 +1105,39 @@ function setupAdminForm() {
       }
     });
   }
+
+  // Load and save Discord settings
+  loadDiscordSettings();
+  const formDiscord = document.getElementById('formDiscordSettings');
+  if (formDiscord) {
+    formDiscord.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const mainWebhook = document.getElementById('settingDiscordWebhookMain').value.trim();
+      const ordersWebhook = document.getElementById('settingDiscordWebhookOrders').value.trim();
+      const topupWebhook = document.getElementById('settingDiscordWebhookTopup').value.trim();
+      const creatorWebhook = document.getElementById('settingDiscordWebhookCreator').value.trim();
+      const inviteUrl = document.getElementById('settingDiscordInviteUrl').value.trim();
+
+      const res = await api('/api/admin/discord/settings', {
+        method: 'POST',
+        body: JSON.stringify({
+          mainWebhook,
+          ordersWebhook,
+          topupWebhook,
+          creatorWebhook,
+          inviteUrl
+        })
+      });
+
+      if (res.success) {
+        showToast('บันทึกการตั้งค่า Discord Webhook สำเร็จ!');
+        const footerLink = document.getElementById('footerDiscordLink');
+        if (footerLink && inviteUrl) footerLink.href = inviteUrl;
+      } else {
+        showToast(res.message, 'error');
+      }
+    });
+  }
 }
 
 async function loadSlipokSettings() {
@@ -1115,6 +1151,81 @@ async function loadSlipokSettings() {
     if (keyInput && res.settings.slipok_api_key) {
       keyInput.value = res.settings.slipok_api_key;
     }
+  }
+}
+
+async function loadDiscordSettings() {
+  const res = await api('/api/admin/discord/settings');
+  if (res.success && res.settings) {
+    const s = res.settings;
+    const mainInput = document.getElementById('settingDiscordWebhookMain');
+    const ordersInput = document.getElementById('settingDiscordWebhookOrders');
+    const topupInput = document.getElementById('settingDiscordWebhookTopup');
+    const creatorInput = document.getElementById('settingDiscordWebhookCreator');
+    const inviteInput = document.getElementById('settingDiscordInviteUrl');
+
+    if (mainInput && s.mainWebhook) mainInput.value = s.mainWebhook;
+    if (ordersInput && s.ordersWebhook) ordersInput.value = s.ordersWebhook;
+    if (topupInput && s.topupWebhook) topupInput.value = s.topupWebhook;
+    if (creatorInput && s.creatorWebhook) creatorInput.value = s.creatorWebhook;
+    if (inviteInput && s.inviteUrl) {
+      inviteInput.value = s.inviteUrl;
+      const footerLink = document.getElementById('footerDiscordLink');
+      if (footerLink) footerLink.href = s.inviteUrl;
+    }
+  }
+}
+
+async function loadPublicDiscordInvite() {
+  try {
+    const res = await api('/api/discord/invite');
+    if (res && res.success && res.invite_url) {
+      const footerLink = document.getElementById('footerDiscordLink');
+      if (footerLink) footerLink.href = res.invite_url;
+    }
+  } catch (err) {
+    // Ignore error silently
+  }
+}
+
+async function testDiscordWebhook() {
+  const mainInput = document.getElementById('settingDiscordWebhookMain');
+  const webhookUrl = mainInput ? mainInput.value.trim() : '';
+
+  if (!webhookUrl) {
+    showToast('กรุณากรอก Discord Webhook URL ในช่องก่อนทดสอบ', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnTestDiscordWebhook');
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ กำลังส่งข้อความทดสอบ...';
+  }
+
+  try {
+    const res = await api('/api/admin/discord/test', {
+      method: 'POST',
+      body: JSON.stringify({ webhookUrl })
+    });
+
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+
+    if (res.success) {
+      showToast(res.message, 'success');
+    } else {
+      showToast(res.message || 'ส่งไม่สำเร็จ ตรวจสอบ Webhook URL อีกครั้ง', 'error');
+    }
+  } catch (err) {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+    showToast('เกิดข้อผิดพลาดในการส่ง: ' + err.message, 'error');
   }
 }
 

@@ -548,6 +548,70 @@
             </div>
             <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">บันทึกการตั้งค่า SlipOK</button>
           </form>
+        </div>
+
+        <!-- 🤖 Discord Integration & Webhook Notification Settings -->
+        <div style="background: var(--bg-surface); border: 1px solid rgba(99, 102, 241, 0.35); border-radius: var(--radius-md); padding: 1.5rem; margin-top: 2rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <h3 style="color: #fff; font-size: 1.15rem; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.35rem;">🤖</span> เชื่อมต่อระบบแจ้งเตือนเข้า Discord (Discord Webhooks)
+                <span style="background: rgba(99, 102, 241, 0.2); color: #818cf8; font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.55rem; border-radius: 999px;">AUTOMATED BOT</span>
+              </h3>
+              <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.35rem; margin-bottom: 0;">
+                แจ้งเตือนยอดสั่งซื้อ, สลิปเติมเงินสำเร็จ, การขอถอนเงิน และระบบความปลอดภัยเข้าห้อง Discord อัตโนมัติแบบ Realtime
+              </p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="testDiscordWebhook()" id="btnTestDiscordWebhook">
+              🔔 ทดสอบยิงข้อความเข้า Discord
+            </button>
+          </div>
+
+          <form id="formDiscordSettings">
+            <div class="grid-responsive-2col">
+              <div class="form-group">
+                <label class="form-label">Discord Webhook หลัก (Main Webhook URL) *</label>
+                <input type="url" class="form-control" id="settingDiscordWebhookMain" placeholder="https://discord.com/api/webhooks/..." required>
+                <small style="color: var(--text-dim); font-size: 0.75rem;">
+                  💡 วิธีเอาลิงก์: ไปที่ Discord -> คลิกขวาที่ห้องที่ต้องการ -> Edit Channel -> Integrations -> Webhooks -> New Webhook -> Copy Webhook URL
+                </small>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">ลิงก์เชิญเข้า Discord Server (Invite Link)</label>
+                <input type="url" class="form-control" id="settingDiscordInviteUrl" placeholder="https://discord.gg/your-store">
+                <small style="color: var(--text-dim); font-size: 0.75rem;">
+                  🔗 ลิงก์นี้จะนำไปแสดงที่ปุ่ม "Discord ติดต่อเรา" ที่ด้านล่างของหน้าเว็บ
+                </small>
+              </div>
+            </div>
+
+            <!-- Optional Dedicated Webhook Accordion -->
+            <details style="margin-top: 0.75rem; background: var(--bg-input); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <summary style="cursor: pointer; font-size: 0.85rem; color: var(--accent-cyan); font-weight: 600;">
+                ⚙️ ตั้งค่าแยกห้องเฉพาะ (Optional: แยกห้องออเดอร์, ห้องเติมเงิน, ห้องถอนเงิน)
+              </summary>
+              <div class="grid-responsive-2col" style="margin-top: 1rem;">
+                <div class="form-group">
+                  <label class="form-label">Webhook เฉพาะ: ห้องออเดอร์คำสั่งซื้อ</label>
+                  <input type="url" class="form-control" id="settingDiscordWebhookOrders" placeholder="เว้นว่างไว้หากต้องการใช้ห้องหลัก">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Webhook เฉพาะ: ห้องเติมเงินพอยท์</label>
+                  <input type="url" class="form-control" id="settingDiscordWebhookTopup" placeholder="เว้นว่างไว้หากต้องการใช้ห้องหลัก">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Webhook เฉพาะ: ห้องผู้ขาย / ขอถอนเงิน</label>
+                  <input type="url" class="form-control" id="settingDiscordWebhookCreator" placeholder="เว้นว่างไว้หากต้องการใช้ห้องหลัก">
+                </div>
+              </div>
+            </details>
+
+            <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">
+              💾 บันทึกการตั้งค่า Discord Webhook
+            </button>
+          </form>
+        </div>
         <!-- 📦 Creator Marketplace Pending Scripts for Review -->
         <div style="background: var(--bg-surface); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--radius-md); padding: 1.5rem; margin-top: 2rem;">
           <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
@@ -706,7 +770,7 @@
       <div style="display: flex; gap: 1rem;">
         <a href="#store" data-view="store" style="color: var(--text-muted);">ร้านค้า</a>
         <a href="#topup" data-view="topup" style="color: var(--text-muted);">เติมเงิน</a>
-        <a href="https://discord.gg/samp-thailand" target="_blank" style="color: var(--accent-cyan);">Discord
+        <a href="https://discord.gg/samp-thailand" target="_blank" style="color: var(--accent-cyan);" id="footerDiscordLink">Discord
           ติดต่อเรา</a>
       </div>
     </div>
@@ -850,7 +914,7 @@
   </div>
 
   <script src="/js/security.js?v=1.0"></script>
-  <script src="/js/app.js?v=2.8"></script>
+  <script src="/js/app.js?v=3.0"></script>
 </body>
 
 </html>

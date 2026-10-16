@@ -1342,6 +1342,66 @@ async function sendDiscordTopupFromClient(webhookUrl, topup) {
   }
 }
 
+async function sendDiscordCreatorSubmissionFromClient(webhookUrl, scriptData) {
+  if (!webhookUrl || !webhookUrl.startsWith('https://discord.com/api/webhooks/')) return;
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'Nexus Creator Bot',
+        avatar_url: 'https://raw.githubusercontent.com/4KINGSOBAD-Tham/nexus-samp-store/main/public/assets/logo.jpg',
+        embeds: [{
+          title: '💼 สมาชิกส่งสคริปต์มาฝากขายใหม่ (Pending Review)',
+          color: 0xf59e0b,
+          description: `มีสมาชิกส่งสคริปต์มาลงหน้าร้าน **กรุณาตรวจสอบความปลอดภัยของไฟล์ก่อนอนุมัติ**`,
+          fields: [
+            { name: '📦 ชื่อสคริปต์', value: `**${scriptData.name}**`, inline: false },
+            { name: '👤 ผู้ส่งขาย', value: `\`${scriptData.creator_name || 'Member'}\``, inline: true },
+            { name: '💵 ราคาที่ตั้งขาย', value: `**฿${Number(scriptData.price).toLocaleString()} บาท** (ผู้ขายได้รับ 80%)`, inline: true },
+            { name: '📁 ลิงก์ตรวจสอบไฟล์', value: `[คลิกเพื่อดาวน์โหลดไฟล์ไปตรวจสอบ](${scriptData.file_url})`, inline: false }
+          ],
+          footer: { text: 'Nexus Marketplace • Creator Hub' },
+          timestamp: new Date().toISOString()
+        }]
+      })
+    });
+  } catch (err) {
+    console.warn('Client Discord notify creator error:', err);
+  }
+}
+
+async function sendDiscordWithdrawalFromClient(webhookUrl, withdrawData) {
+  if (!webhookUrl || !webhookUrl.startsWith('https://discord.com/api/webhooks/')) return;
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'Nexus Payout Bot',
+        avatar_url: 'https://raw.githubusercontent.com/4KINGSOBAD-Tham/nexus-samp-store/main/public/assets/logo.jpg',
+        embeds: [{
+          title: '💸 มีคำขอแจ้งถอนเงินสดใหม่ (Withdrawal Request)',
+          color: 0xec4899,
+          description: `ผู้ขายขอถอนเงินรายได้ กรุณาดำเนินการโอนเงินเข้าบัญชีตามข้อมูลด้านล่าง:`,
+          fields: [
+            { name: '👤 ผู้ขอถอน', value: `\`${withdrawData.username}\``, inline: true },
+            { name: '💰 จำนวนเงินที่ถอน', value: `**฿${Number(withdrawData.amount).toLocaleString()} บาท**`, inline: true },
+            { name: '🏦 ธนาคาร / บริการ', value: withdrawData.bank_name, inline: true },
+            { name: '💳 เลขที่บัญชี / พร้อมเพย์', value: `\`${withdrawData.account_number}\``, inline: true },
+            { name: '📝 ชื่อบัญชี', value: `**${withdrawData.account_name}**`, inline: true },
+            { name: '⏳ สถานะ', value: '🟡 รอแอดมินโอนเงินและกดยืนยัน', inline: false }
+          ],
+          footer: { text: 'Nexus Marketplace • Seller Payout System' },
+          timestamp: new Date().toISOString()
+        }]
+      })
+    });
+  } catch (err) {
+    console.warn('Client Discord notify withdraw error:', err);
+  }
+}
+
 // ----------------------------------------------------
 // 🛡️ Admin Security Dashboard Handlers (Nexus Shield)
 // ----------------------------------------------------
@@ -1551,6 +1611,10 @@ function setupCreatorMarketplace() {
           if (creatorPreviewWrap) creatorPreviewWrap.style.display = 'none';
           switchCreatorTab('my-scripts');
           loadCreatorDashboard();
+
+          if (data.webhookUrl && data.creatorInfo) {
+            sendDiscordCreatorSubmissionFromClient(data.webhookUrl, data.creatorInfo);
+          }
         } else {
           showToast(data.message, 'error');
         }
@@ -1590,6 +1654,10 @@ function setupCreatorMarketplace() {
         formWithdraw.reset();
         await checkAuth(); // update balance on nav
         loadCreatorDashboard();
+
+        if (res.webhookUrl && res.withdrawalInfo) {
+          sendDiscordWithdrawalFromClient(res.webhookUrl, res.withdrawalInfo);
+        }
       } else {
         showToast(res.message, 'error');
       }

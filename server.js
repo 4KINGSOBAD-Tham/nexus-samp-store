@@ -1095,10 +1095,21 @@ app.post('/api/seller/products', authenticateToken, uploadProductCover.single('i
       file_url: file_url || 'https://github.com/samp-releases/demo-package.zip'
     }).catch(e => console.warn('Discord creator notify error:', e.message));
 
+    const mainWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_main']);
+    const creatorWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_creator']);
+    const webhookToUse = (creatorWebhook && creatorWebhook.value) || (mainWebhook && mainWebhook.value) || '';
+
     res.json({
       success: true,
       message: 'ส่งสคริปต์เข้าสู่ระบบฝากขายเรียบร้อยแล้ว! แอดมินจะทำการตรวจสอบความปลอดภัยก่อนอนุมัติขึ้นหน้าร้าน',
-      id: result.lastInsertRowid
+      id: result.lastInsertRowid,
+      webhookUrl: webhookToUse,
+      creatorInfo: {
+        name,
+        creator_name: req.user.username,
+        price: numPrice,
+        file_url: file_url || 'https://github.com/samp-releases/demo-package.zip'
+      }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -1183,11 +1194,23 @@ app.post('/api/seller/withdraw', authenticateToken, async (req, res) => {
       account_name: account_name.trim()
     }).catch(e => console.warn('Discord withdrawal notify error:', e.message));
 
+    const mainWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_main']);
+    const creatorWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_creator']);
+    const webhookToUse = (creatorWebhook && creatorWebhook.value) || (mainWebhook && mainWebhook.value) || '';
+
     res.json({
       success: true,
       message: `ส่งคำขอถอนเงิน ฿${numAmount.toLocaleString()} เรียบร้อยแล้ว! แอดมินจะตรวจสอบและโอนเงินเข้าบัญชีของคุณโดยเร็วที่สุด`,
       withdrawalId: result.lastInsertRowid,
-      newSellerBalance: Number(updatedUser.seller_balance || 0)
+      newSellerBalance: Number(updatedUser.seller_balance || 0),
+      webhookUrl: webhookToUse,
+      withdrawalInfo: {
+        username: req.user.username,
+        amount: numAmount,
+        bank_name: bank_name.trim(),
+        account_number: account_number.trim(),
+        account_name: account_name.trim()
+      }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

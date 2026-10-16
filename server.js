@@ -14,8 +14,9 @@ const multer = require('multer');
 const discord = require('./discord');
 
 // Start Discord Bot Service (Auto-loads token from env or Supabase site_settings)
+let botModule = null;
 try {
-  require('./bot');
+  botModule = require('./bot');
 } catch (botErr) {
   console.warn('⚠️ [Discord Bot] Failed to initialize:', botErr.message);
 }
@@ -316,6 +317,23 @@ function requireAdmin(req, res, next) {
 // ----------------------------------------------------
 // Public APIs
 // ----------------------------------------------------
+
+// Server & Bot Health Check
+app.get('/api/health', (req, res) => {
+  const isReady = !!(botModule && botModule.client && botModule.client.isReady());
+  const tag = (botModule && botModule.client && botModule.client.user) ? botModule.client.user.tag : null;
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    bot: {
+      isReady,
+      tag,
+      status: isReady ? 'ONLINE' : 'OFFLINE'
+    },
+    database: db.isPostgres ? 'Supabase PostgreSQL' : 'SQLite Local',
+    uptime: Math.round(process.uptime()) + 's'
+  });
+});
 
 // Site Settings
 app.get('/api/settings', async (req, res) => {

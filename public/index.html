@@ -593,16 +593,20 @@
               </summary>
               <div class="grid-responsive-2col" style="margin-top: 1rem;">
                 <div class="form-group">
-                  <label class="form-label">Webhook เฉพาะ: ห้องออเดอร์คำสั่งซื้อ</label>
+                  <label class="form-label">Webhook เฉพาะ: ห้องออเดอร์คำสั่งซื้อ (ห้อง #🔔┃แจ้งเตือนคำสั่งซื้อ)</label>
                   <input type="url" class="form-control" id="settingDiscordWebhookOrders" placeholder="เว้นว่างไว้หากต้องการใช้ห้องหลัก">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Webhook เฉพาะ: ห้องเติมเงินพอยท์</label>
+                  <label class="form-label">Webhook เฉพาะ: ห้องเติมเงินพอยท์ (ห้อง #💰┃แจ้งเติมเงินสำเร็จ)</label>
                   <input type="url" class="form-control" id="settingDiscordWebhookTopup" placeholder="เว้นว่างไว้หากต้องการใช้ห้องหลัก">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Webhook เฉพาะ: ห้องผู้ขาย / ขอถอนเงิน</label>
+                  <label class="form-label">Webhook เฉพาะ: ห้องสคริปต์ฝากขาย (ห้อง #📝┃สคริปต์รอตรวจสอบ)</label>
                   <input type="url" class="form-control" id="settingDiscordWebhookCreator" placeholder="เว้นว่างไว้หากต้องการใช้ห้องหลัก">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Webhook เฉพาะ: ห้องแจ้งขอถอนเงินสด (ห้อง #💸┃คำขอถอนเงิน)</label>
+                  <input type="url" class="form-control" id="settingDiscordWebhookWithdraw" placeholder="เว้นว่างไว้หากต้องการใช้ห้องหลัก">
                 </div>
               </div>
             </details>
@@ -914,7 +918,7 @@
   </div>
 
   <script src="/js/security.js?v=1.0"></script>
-  <script src="/js/app.js?v=3.4"></script>
+  <script src="/js/app.js?v=3.5"></script>
 </body>
 
 </html>

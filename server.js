@@ -1545,6 +1545,7 @@ app.get('/api/admin/discord/settings', authenticateToken, requireAdmin, async (r
     const ordersWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_orders']);
     const topupWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_topup']);
     const creatorWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_creator']);
+    const withdrawWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_withdraw']);
     const inviteUrl = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_invite_url']);
 
     res.json({
@@ -1554,6 +1555,7 @@ app.get('/api/admin/discord/settings', authenticateToken, requireAdmin, async (r
         ordersWebhook: ordersWebhook?.value || '',
         topupWebhook: topupWebhook?.value || '',
         creatorWebhook: creatorWebhook?.value || '',
+        withdrawWebhook: withdrawWebhook?.value || '',
         inviteUrl: inviteUrl?.value || 'https://discord.gg/samp-thailand'
       }
     });
@@ -1564,7 +1566,7 @@ app.get('/api/admin/discord/settings', authenticateToken, requireAdmin, async (r
 
 app.post('/api/admin/discord/settings', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { mainWebhook, ordersWebhook, topupWebhook, creatorWebhook, inviteUrl } = req.body;
+    const { mainWebhook, ordersWebhook, topupWebhook, creatorWebhook, withdrawWebhook, inviteUrl } = req.body;
 
     const upsertSetting = async (key, value) => {
       if (db.isPostgres) {
@@ -1578,6 +1580,7 @@ app.post('/api/admin/discord/settings', authenticateToken, requireAdmin, async (
     if (ordersWebhook !== undefined) await upsertSetting('discord_webhook_orders', ordersWebhook);
     if (topupWebhook !== undefined) await upsertSetting('discord_webhook_topup', topupWebhook);
     if (creatorWebhook !== undefined) await upsertSetting('discord_webhook_creator', creatorWebhook);
+    if (withdrawWebhook !== undefined) await upsertSetting('discord_webhook_withdraw', withdrawWebhook);
     if (inviteUrl !== undefined) await upsertSetting('discord_invite_url', inviteUrl);
 
     res.json({ success: true, message: 'บันทึกการตั้งค่า Discord เรียบร้อยแล้ว!' });

@@ -189,7 +189,7 @@ async function notifyCreatorSubmission(scriptData) {
  * 💸 4. Notify on Creator Withdrawal Request
  */
 async function notifyWithdrawalRequest(withdrawData) {
-  const url = await getWebhookUrl('creator');
+  const url = (await getWebhookUrl('withdraw')) || (await getWebhookUrl('creator'));
   if (!url) return;
 
   const payload = {

@@ -1124,6 +1124,8 @@ function setupAdminForm() {
       const ordersWebhook = document.getElementById('settingDiscordWebhookOrders').value.trim();
       const topupWebhook = document.getElementById('settingDiscordWebhookTopup').value.trim();
       const creatorWebhook = document.getElementById('settingDiscordWebhookCreator').value.trim();
+      const withdrawInput = document.getElementById('settingDiscordWebhookWithdraw');
+      const withdrawWebhook = withdrawInput ? withdrawInput.value.trim() : '';
       const inviteUrl = document.getElementById('settingDiscordInviteUrl').value.trim();
 
       const res = await api('/api/admin/discord/settings', {
@@ -1133,6 +1135,7 @@ function setupAdminForm() {
           ordersWebhook,
           topupWebhook,
           creatorWebhook,
+          withdrawWebhook,
           inviteUrl
         })
       });
@@ -1170,12 +1173,14 @@ async function loadDiscordSettings() {
     const ordersInput = document.getElementById('settingDiscordWebhookOrders');
     const topupInput = document.getElementById('settingDiscordWebhookTopup');
     const creatorInput = document.getElementById('settingDiscordWebhookCreator');
+    const withdrawInput = document.getElementById('settingDiscordWebhookWithdraw');
     const inviteInput = document.getElementById('settingDiscordInviteUrl');
 
     if (mainInput && s.mainWebhook) mainInput.value = s.mainWebhook;
     if (ordersInput && s.ordersWebhook) ordersInput.value = s.ordersWebhook;
     if (topupInput && s.topupWebhook) topupInput.value = s.topupWebhook;
     if (creatorInput && s.creatorWebhook) creatorInput.value = s.creatorWebhook;
+    if (withdrawInput && s.withdrawWebhook) withdrawInput.value = s.withdrawWebhook;
     if (inviteInput && s.inviteUrl) {
       inviteInput.value = s.inviteUrl;
       const footerLink = document.getElementById('footerDiscordLink');

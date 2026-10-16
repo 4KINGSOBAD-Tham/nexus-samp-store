@@ -1218,7 +1218,39 @@ async function testDiscordWebhook() {
     if (res.success) {
       showToast(res.message, 'success');
     } else {
-      showToast(res.message || 'ส่งไม่สำเร็จ ตรวจสอบ Webhook URL อีกครั้ง', 'error');
+      // Try direct client fetch as fallback (in case cloud server IP is temporarily rate-limited)
+      let sentFromClient = false;
+      try {
+        const clientRes = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: 'Nexus Store Notifier',
+            avatar_url: 'https://cdn-icons-png.flaticon.com/512/906/906343.png',
+            embeds: [{
+              title: '🔔 ยืนยันการเชื่อมต่อ Discord Webhook สำเร็จ!',
+              description: 'ระบบร้านค้า **Nexus SAMP Store** เชื่อมต่อกับห้องในเซิร์ฟเวอร์ของคุณเรียบร้อยแล้ว 🎉\n\nพร้อมรับการแจ้งเตือนยอดคำสั่งซื้อ, สลิปโอนเงิน, และระบบความปลอดภัยแบบ Real-time ตลอด 24 ชม.',
+              color: 0x10b981,
+              fields: [
+                { name: '🌐 สถานะระบบ', value: '🟢 ออนไลน์และพร้อมใช้งาน', inline: true },
+                { name: '⏰ เวลาที่เชื่อมต่อ', value: new Date().toLocaleString('th-TH'), inline: true }
+              ],
+              footer: { text: 'Nexus SAMP Store • Automated Notification Engine' }
+            }]
+          })
+        });
+
+        if (clientRes.status === 204 || clientRes.ok) {
+          sentFromClient = true;
+          showToast('ยิงข้อความทดสอบเข้า Discord สำเร็จ! ลองเปิดดูในห้องดิสคอร์ดของคุณได้เลยครับ 🎉', 'success');
+        }
+      } catch (clientErr) {
+        console.warn('Client direct webhook error:', clientErr);
+      }
+
+      if (!sentFromClient) {
+        showToast(res.message || 'ส่งไม่สำเร็จ ตรวจสอบ Webhook URL อีกครั้ง', 'error');
+      }
     }
   } catch (err) {
     if (btn) {

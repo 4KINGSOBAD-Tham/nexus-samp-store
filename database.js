@@ -220,7 +220,7 @@ async function initDatabase() {
     bank_name: 'ธนาคารไทยพาณิชย์ (SCB)',
     bank_account: '5632881610',
     bank_account_name: 'ธาม สุวรรณรัตน์',
-    discord_link: 'https://discord.gg/NzcJ5CT4ru',
+    discord_link: 'https://discord.gg/jcgjfZvP97',
     facebook_link: 'https://facebook.com/nexussamp',
     youtube_link: 'https://youtube.com/@nexussamp',
     announcement: '🔥 ยินดีต้อนรับสู่ Nexus SAMP Store! เติมเงินครบ 500 บาท รับโบนัส 10% ฟรีทันที',

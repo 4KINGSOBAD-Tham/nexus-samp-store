@@ -1563,7 +1563,7 @@ app.get('/api/admin/discord/settings', authenticateToken, requireAdmin, async (r
         topupWebhook: topupWebhook?.value || '',
         creatorWebhook: creatorWebhook?.value || '',
         withdrawWebhook: withdrawWebhook?.value || '',
-        inviteUrl: inviteUrl?.value || 'https://discord.gg/NzcJ5CT4ru'
+        inviteUrl: inviteUrl?.value || 'https://discord.gg/jcgjfZvP97'
       }
     });
   } catch (err) {
@@ -1623,7 +1623,7 @@ app.post('/api/admin/discord/test', authenticateToken, requireAdmin, async (req,
 app.get('/api/discord/invite', async (req, res) => {
   try {
     const invite = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_invite_url']);
-    res.json({ success: true, url: invite?.value || 'https://discord.gg/NzcJ5CT4ru' });
+    res.json({ success: true, url: invite?.value || 'https://discord.gg/jcgjfZvP97' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

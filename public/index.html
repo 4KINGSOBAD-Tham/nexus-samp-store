@@ -372,10 +372,17 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label">ลิงก์ดาวน์โหลดไฟล์สคริปต์ (ZIP / RAR) *</label>
-                <input type="url" class="form-control" id="creatorProdFileUrl" placeholder="เช่น https://drive.google.com/... หรือ MediaFire" required>
-                <small style="color: var(--text-dim); font-size: 0.78rem;">
-                  🔒 แอดมินจะดาวน์โหลดไปตรวจสอบความปลอดภัยก่อนอนุมัติ และผู้ซื้อจะได้รับลิงก์นี้อัตโนมัติ
+                <label class="form-label">ลิงก์ดาวน์โหลดไฟล์สคริปต์ (เช่น Google Drive, MediaFire) หรืออัปโหลดไฟล์ด้านล่าง</label>
+                <input type="url" class="form-control" id="creatorProdFileUrl" placeholder="https://drive.google.com/... หรือ MediaFire (ถ้ามี)">
+              </div>
+
+              <div class="form-group" style="background: rgba(255, 69, 0, 0.05); border: 1px dashed rgba(255, 69, 0, 0.35); border-radius: var(--radius-sm); padding: 0.85rem; margin-bottom: 1.25rem;">
+                <label class="form-label" style="display: flex; align-items: center; gap: 0.4rem; color: #ff7700; margin-bottom: 0.35rem;">
+                  <span>🛡️</span> อัปโหลดไฟล์แพ็กเกจ (.ZIP) เพื่อสแกนไวรัสและ Backdoor อัตโนมัติ (แนะนำ)
+                </label>
+                <input type="file" class="form-control" id="creatorProdPackageFile" accept=".zip">
+                <small style="color: var(--text-dim); font-size: 0.78rem; display: block; margin-top: 0.4rem;">
+                  ⚡ ระบบจะตรวจสแกนโครงสร้างไฟล์, ตัวรันเซิร์ฟเวอร์ (.exe) ของแท้ และสแกนโค้ด Backdoor ให้อัตโนมัติทันที
                 </small>
               </div>
 
@@ -920,7 +927,7 @@
   </div>
 
   <script src="/js/security.js?v=1.0"></script>
-  <script src="/js/app.js?v=3.6"></script>
+  <script src="/js/app.js?v=4.0"></script>
 </body>
 
 </html>

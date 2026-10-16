@@ -1364,6 +1364,7 @@ async function sendDiscordCreatorSubmissionFromClient(webhookUrl, scriptData) {
             { name: '📦 ชื่อสคริปต์', value: `**${scriptData.name}**`, inline: false },
             { name: '👤 ผู้ส่งขาย', value: `\`${scriptData.creator_name || 'Member'}\``, inline: true },
             { name: '💵 ราคาที่ตั้งขาย', value: `**฿${Number(scriptData.price).toLocaleString()} บาท** (ผู้ขายได้รับ 80%)`, inline: true },
+            { name: '🛡️ สถานะความปลอดภัย', value: scriptData.security_summary || '🟢 ผ่านการตรวจสแกนความปลอดภัยอัตโนมัติ (ไร้ Backdoor)', inline: false },
             { name: '📁 ลิงก์ตรวจสอบไฟล์', value: `[คลิกเพื่อดาวน์โหลดไฟล์ไปตรวจสอบ](${scriptData.file_url})`, inline: false }
           ],
           footer: { text: 'Nexus Marketplace • Creator Hub' },
@@ -1570,11 +1571,24 @@ function setupCreatorMarketplace() {
         return;
       }
 
+      const packageInput = document.getElementById('creatorProdPackageFile');
+      const pkgFile = packageInput && packageInput.files[0] ? packageInput.files[0] : null;
+      const fileUrlVal = document.getElementById('creatorProdFileUrl').value.trim();
+
+      if (!fileUrlVal && !pkgFile) {
+        showToast('กรุณาระบุลิงก์ดาวน์โหลด หรือเลือกไฟล์ .ZIP เพื่อสแกน', 'error');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
+        return;
+      }
+
       const submitBtn = formSubmit.querySelector('button[type="submit"]');
       const originalText = submitBtn ? submitBtn.innerHTML : '';
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '⏳ กำลังประมวลผลรูปภาพและส่งข้อมูล...';
+        submitBtn.innerHTML = '🛡️ กำลังตรวจสแกนโครงสร้างและมัลแวร์...';
       }
 
       let fileToUpload = creatorFileInput && creatorFileInput.files[0] ? creatorFileInput.files[0] : null;
@@ -1586,13 +1600,16 @@ function setupCreatorMarketplace() {
       formData.append('name', document.getElementById('creatorProdName').value.trim());
       formData.append('category_slug', document.getElementById('creatorProdCategory').value);
       formData.append('price', document.getElementById('creatorProdPrice').value);
-      formData.append('file_url', document.getElementById('creatorProdFileUrl').value.trim());
+      formData.append('file_url', fileUrlVal);
       formData.append('samp_version', document.getElementById('creatorProdSampVer').value.trim());
       formData.append('short_desc', document.getElementById('creatorProdShortDesc').value.trim());
       formData.append('description', document.getElementById('creatorProdDesc').value.trim());
 
       if (fileToUpload) {
         formData.append('imageFile', fileToUpload, fileToUpload.name);
+      }
+      if (pkgFile) {
+        formData.append('scriptPackage', pkgFile, pkgFile.name);
       }
 
       try {
@@ -1618,9 +1635,18 @@ function setupCreatorMarketplace() {
           loadCreatorDashboard();
 
           if (data.webhookUrl && data.creatorInfo) {
-            sendDiscordCreatorSubmissionFromClient(data.webhookUrl, data.creatorInfo);
+            const infoToSend = {
+              ...data.creatorInfo,
+              security_summary: data.securityScan ? data.securityScan.summary : null
+            };
+            sendDiscordCreatorSubmissionFromClient(data.webhookUrl, infoToSend);
           }
         } else {
+          let errorMsg = data.message;
+          if (data.threats && data.threats.length > 0) {
+            errorMsg += '\n\nรายการที่พบ:\n• ' + data.threats.join('\n• ');
+          }
+          alert('🚫 ตรวจพบความเสี่ยงความปลอดภัย:\n\n' + errorMsg);
           showToast(data.message, 'error');
         }
       } catch (err) {

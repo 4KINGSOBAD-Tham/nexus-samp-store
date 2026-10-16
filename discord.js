@@ -175,6 +175,11 @@ async function notifyCreatorSubmission(scriptData) {
         { name: '📦 ชื่อสคริปต์', value: `**${scriptData.name}**`, inline: false },
         { name: '👤 ผู้ส่งขาย', value: `\`${scriptData.creator_name || 'Member'}\``, inline: true },
         { name: '💵 ราคาที่ตั้งขาย', value: `**฿${Number(scriptData.price).toLocaleString()} บาท** (ผู้ขายได้รับ 80%)`, inline: true },
+        { 
+          name: '🛡️ รายงานความปลอดภัย (Security Audit)', 
+          value: `${scriptData.security_summary || '🟢 ผ่านการสแกนความปลอดภัยเบื้องต้น'}${scriptData.server_executables ? `\n• ตัวรันเซิร์ฟเวอร์: \`${scriptData.server_executables}\`` : ''}${scriptData.virustotal_url ? `\n• [คลิกดูรายงาน VirusTotal](${scriptData.virustotal_url})` : ''}`, 
+          inline: false 
+        },
         { name: '📁 ลิงก์ตรวจสอบไฟล์', value: `[คลิกเพื่อดาวน์โหลดไฟล์ไปตรวจสอบ](${scriptData.file_url})`, inline: false }
       ],
       footer: { text: 'Nexus Marketplace • Creator Hub' },

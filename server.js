@@ -62,6 +62,17 @@ const uploadProductCover = multer({
   fileFilter: imageFileFilter
 });
 
+const scanner = require('./security-scanner');
+
+// Multipart handler for creator uploads (Cover image + Optional Script Package ZIP)
+const uploadCreatorProduct = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 60 * 1024 * 1024 } // Up to 60MB packages
+}).fields([
+  { name: 'imageFile', maxCount: 1 },
+  { name: 'scriptPackage', maxCount: 1 }
+]);
+
 // Helper to convert uploaded product image into persistent Base64 and write to disk
 function getProductImageData(file, fallback = '/assets/roleplay.jpg') {
   if (!file || !file.buffer) return fallback;
@@ -1041,7 +1052,7 @@ app.post('/api/user/reset-hwid', authenticateToken, async (req, res) => {
 // ----------------------------------------------------
 
 // Submit Product for Review (Creator ฝากขายสคริปต์)
-app.post('/api/seller/products', authenticateToken, uploadProductCover.single('imageFile'), async (req, res) => {
+app.post('/api/seller/products', authenticateToken, uploadCreatorProduct, async (req, res) => {
   try {
     const {
       name, category_slug, price, original_price, samp_version,
@@ -1058,13 +1069,68 @@ app.post('/api/seller/products', authenticateToken, uploadProductCover.single('i
       return res.status(400).json({ success: false, message: 'กรุณาระบุราคาที่ถูกต้อง (มากกว่า 0 บาท)' });
     }
 
-    if (!file_url && !req.file) {
-      return res.status(400).json({ success: false, message: 'กรุณาระบุลิงก์ดาวน์โหลดไฟล์สคริปต์ (เช่น Google Drive, GitHub หรือ MediaFire)' });
+    const imageFile = req.files && req.files.imageFile ? req.files.imageFile[0] : null;
+    const scriptPackage = req.files && req.files.scriptPackage ? req.files.scriptPackage[0] : null;
+
+    if (!file_url && !scriptPackage) {
+      return res.status(400).json({ success: false, message: 'กรุณาระบุลิงก์ดาวน์โหลดไฟล์สคริปต์ หรืออัปโหลดไฟล์แพ็กเกจ (.ZIP)' });
+    }
+
+    // ----------------------------------------------------
+    // 🛡️ SECURITY AUDIT & BACKDOOR SCANNER
+    // ----------------------------------------------------
+    let scanReport = null;
+    let finalFileUrl = file_url ? file_url.trim() : '';
+
+    if (scriptPackage && scriptPackage.buffer) {
+      const ext = path.extname(scriptPackage.originalname).toLowerCase();
+      if (ext === '.zip') {
+        scanReport = await scanner.scanZipArchiveBuffer(scriptPackage.buffer);
+      } else if (scanner.DANGEROUS_EXTENSIONS.includes(ext)) {
+        return res.status(400).json({
+          success: false,
+          message: `🚫 ปฏิเสธการอัปโหลด: ไม่อนุญาตให้ใช้ไฟล์ประเภท ${ext.toUpperCase()} เนื่องจากเป็นไฟล์สคริปต์สุ่มเสี่ยงความปลอดภัยสูง`
+        });
+      }
+
+      // If dangerous threats or backdoors found: BLOCK IMMEDIATELY
+      if (scanReport && !scanReport.isClean) {
+        return res.status(400).json({
+          success: false,
+          message: scanReport.summary,
+          threats: [...(scanReport.blockedFiles || []), ...(scanReport.backdoors || [])]
+        });
+      }
+
+      // If no external URL provided, save zip to secure public/uploads
+      if (!finalFileUrl) {
+        const safePkgName = 'pkg-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
+        try {
+          fs.writeFileSync(path.join(uploadsDir, safePkgName), scriptPackage.buffer);
+          finalFileUrl = '/uploads/' + safePkgName;
+        } catch (e) {
+          console.warn('Could not save script package to disk:', e.message);
+        }
+      }
+    } else if (code_snippet) {
+      // Scan code snippet for backdoor patterns
+      const issues = scanner.scanPawnSourceCode(code_snippet);
+      if (issues.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `🚫 ตรวจพบโค้ดที่มีความเสี่ยง Backdoor ในสคริปต์ (${issues[0].threat}) ที่บรรทัด ${issues[0].line}`
+        });
+      }
+      scanReport = {
+        isClean: true,
+        riskLevel: 'clean',
+        summary: '🟢 ผ่านการสแกนโค้ดสคริปต์ Pawn: ปลอดภัย ไร้ Backdoor'
+      };
     }
 
     let finalImage = '/assets/roleplay.jpg';
-    if (req.file) {
-      finalImage = getProductImageData(req.file);
+    if (imageFile) {
+      finalImage = getProductImageData(imageFile);
     } else if (image) {
       finalImage = image;
     }
@@ -1092,14 +1158,17 @@ app.post('/api/seller/products', authenticateToken, uploadProductCover.single('i
       typeof requirements === 'string' ? requirements : JSON.stringify(requirements || []),
       code_snippet || '',
       finalImage,
-      file_url || 'https://github.com/samp-releases/demo-package.zip'
+      finalFileUrl || 'https://github.com/samp-releases/demo-package.zip'
     ]);
 
     await discord.notifyCreatorSubmission({
       name,
       creator_name: req.user.username,
       price: numPrice,
-      file_url: file_url || 'https://github.com/samp-releases/demo-package.zip'
+      file_url: finalFileUrl || 'https://github.com/samp-releases/demo-package.zip',
+      security_summary: scanReport ? scanReport.summary : '🟢 ตรวจสอบลิงก์ดาวน์โหลดเบื้องต้นเรียบร้อย',
+      virustotal_url: scanReport ? scanReport.virustotalUrl : null,
+      server_executables: scanReport && scanReport.serverExecutables ? scanReport.serverExecutables.map(e => e.name).join(', ') : null
     }).catch(e => console.warn('Discord creator notify error:', e.message));
 
     const mainWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_main']);
@@ -1108,15 +1177,16 @@ app.post('/api/seller/products', authenticateToken, uploadProductCover.single('i
 
     res.json({
       success: true,
-      message: 'ส่งสคริปต์เข้าสู่ระบบฝากขายเรียบร้อยแล้ว! แอดมินจะทำการตรวจสอบความปลอดภัยก่อนอนุมัติขึ้นหน้าร้าน',
+      message: 'ส่งสคริปต์เข้าสู่ระบบฝากขายเรียบร้อยแล้ว! ' + (scanReport ? scanReport.summary : 'แอดมินจะทำการตรวจสอบความปลอดภัยก่อนอนุมัติ'),
       id: result.lastInsertRowid,
       webhookUrl: webhookToUse,
       creatorInfo: {
         name,
         creator_name: req.user.username,
         price: numPrice,
-        file_url: file_url || 'https://github.com/samp-releases/demo-package.zip'
-      }
+        file_url: finalFileUrl || 'https://github.com/samp-releases/demo-package.zip'
+      },
+      securityScan: scanReport
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

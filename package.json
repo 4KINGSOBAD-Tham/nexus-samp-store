@@ -19,6 +19,7 @@
   "author": "Rank1SAMP",
   "license": "ISC",
   "dependencies": {
+    "adm-zip": "^0.6.1",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",

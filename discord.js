@@ -91,6 +91,25 @@ async function notifyOrder(orderData) {
   const url = await getWebhookUrl('orders');
   if (!url) return;
 
+  const orderFields = [
+    { name: '👤 ผู้ซื้อ', value: `\`${orderData.username}\``, inline: true },
+    { name: '💰 ยอดชำระ', value: `**฿${Number(orderData.price).toLocaleString()} บาท**`, inline: true },
+    { name: '🎮 SA-MP เวอร์ชัน', value: orderData.samp_version || '0.3.7', inline: true }
+  ];
+
+  if (orderData.seller_name) {
+    orderFields.push(
+      { name: '💻 เจ้าของผลงาน (Creator)', value: `\`${orderData.seller_name}\``, inline: true },
+      { name: '💵 ผู้ขายได้รับ (80%)', value: `**฿${Number(orderData.seller_earnings || 0).toLocaleString()}**`, inline: true },
+      { name: '👑 เข้ากองกลางร้าน (20%)', value: `**฿${Number(orderData.admin_fee || 0).toLocaleString()}**`, inline: true }
+    );
+  }
+
+  orderFields.push(
+    { name: '🔑 License Key', value: `\`${orderData.license_key}\``, inline: false },
+    { name: '⚡ สถานะการส่งมอบ', value: '✅ จัดส่งไฟล์ดาวน์โหลดอัตโนมัติ 24 ชม. เรียบร้อย', inline: false }
+  );
+
   const payload = {
     username: 'Nexus Store Bot',
     avatar_url: 'https://raw.githubusercontent.com/4KINGSOBAD-Tham/nexus-samp-store/main/public/assets/logo.jpg',
@@ -98,13 +117,7 @@ async function notifyOrder(orderData) {
       title: '📦 มีรายการสั่งซื้อใหม่เข้ามา! (New Order)',
       color: COLORS.ORDER,
       description: `มีลูกค้าสั่งซื้อสคริปต์ **${orderData.product_name}** สำเร็จแล้ว!`,
-      fields: [
-        { name: '👤 ผู้ซื้อ', value: `\`${orderData.username}\``, inline: true },
-        { name: '💰 ยอดชำระ', value: `**฿${Number(orderData.price).toLocaleString()} บาท**`, inline: true },
-        { name: '🎮 SA-MP เวอร์ชัน', value: orderData.samp_version || '0.3.7', inline: true },
-        { name: '🔑 License Key', value: `\`${orderData.license_key}\``, inline: false },
-        { name: '⚡ สถานะการส่งมอบ', value: '✅ จัดส่งไฟล์ดาวน์โหลดอัตโนมัติ 24 ชม. เรียบร้อย', inline: false }
-      ],
+      fields: orderFields,
       footer: { text: 'Nexus SAMP Store • Automated Delivery System' },
       timestamp: new Date().toISOString()
     }]

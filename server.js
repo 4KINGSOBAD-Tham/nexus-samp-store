@@ -877,12 +877,15 @@ app.post('/api/orders/checkout', authenticateToken, async (req, res) => {
     let adminFee = prodPrice;
     let sellerEarnings = 0;
     const sellerId = product.seller_id || null;
+    let sellerUsername = null;
 
     if (sellerId && sellerId !== req.user.id) {
       adminFee = Math.round(prodPrice * 0.20 * 100) / 100; // 20%
       sellerEarnings = Math.round((prodPrice - adminFee) * 100) / 100; // 80%
       // Credit seller's withdrawable balance
       await db.run('UPDATE users SET seller_balance = COALESCE(seller_balance, 0) + ? WHERE id = ?', [sellerEarnings, sellerId]);
+      const seller = await db.get('SELECT username FROM users WHERE id = ?', [sellerId]);
+      if (seller) sellerUsername = seller.username;
     }
 
     // Insert order
@@ -898,7 +901,10 @@ app.post('/api/orders/checkout', authenticateToken, async (req, res) => {
       username: req.user.username,
       price: prodPrice,
       samp_version: product.samp_version,
-      license_key: licenseKey
+      license_key: licenseKey,
+      seller_name: sellerUsername,
+      seller_earnings: sellerEarnings,
+      admin_fee: adminFee
     }).catch(e => console.warn('Discord order notify error:', e.message));
 
     const mainWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_main']);
@@ -915,7 +921,10 @@ app.post('/api/orders/checkout', authenticateToken, async (req, res) => {
         price: prodPrice,
         license_key: licenseKey,
         file_url: product.file_url,
-        hwid_resets_left: 3
+        hwid_resets_left: 3,
+        seller_name: sellerUsername,
+        seller_earnings: sellerEarnings,
+        admin_fee: adminFee
       },
       newBalance: Number(updatedUser.balance || 0),
       user: updatedUser,

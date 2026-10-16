@@ -1272,6 +1272,24 @@ async function testDiscordWebhook() {
 async function sendDiscordOrderFromClient(webhookUrl, order, username) {
   if (!webhookUrl || !webhookUrl.startsWith('https://discord.com/api/webhooks/')) return;
   try {
+    const fields = [
+      { name: '👤 ผู้ซื้อ', value: `\`${username}\``, inline: true },
+      { name: '💰 ยอดชำระ', value: `**฿${Number(order.price).toLocaleString()} บาท**`, inline: true }
+    ];
+
+    if (order.seller_name) {
+      fields.push(
+        { name: '💻 เจ้าของผลงาน (Creator)', value: `\`${order.seller_name}\``, inline: true },
+        { name: '💵 ผู้ขายได้รับ (80%)', value: `**฿${Number(order.seller_earnings || 0).toLocaleString()}**`, inline: true },
+        { name: '👑 เข้ากองกลางร้าน (20%)', value: `**฿${Number(order.admin_fee || 0).toLocaleString()}**`, inline: true }
+      );
+    }
+
+    fields.push(
+      { name: '🔑 License Key', value: `\`${order.license_key}\``, inline: false },
+      { name: '⚡ สถานะการส่งมอบ', value: '✅ จัดส่งไฟล์ดาวน์โหลดอัตโนมัติ 24 ชม. เรียบร้อย', inline: false }
+    );
+
     await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1282,12 +1300,7 @@ async function sendDiscordOrderFromClient(webhookUrl, order, username) {
           title: '📦 มีรายการสั่งซื้อใหม่เข้ามา! (New Order)',
           color: 0x10b981,
           description: `มีลูกค้าสั่งซื้อสคริปต์ **${order.product_name}** สำเร็จแล้ว!`,
-          fields: [
-            { name: '👤 ผู้ซื้อ', value: `\`${username}\``, inline: true },
-            { name: '💰 ยอดชำระ', value: `**฿${Number(order.price).toLocaleString()} บาท**`, inline: true },
-            { name: '🔑 License Key', value: `\`${order.license_key}\``, inline: false },
-            { name: '⚡ สถานะการส่งมอบ', value: '✅ จัดส่งไฟล์ดาวน์โหลดอัตโนมัติ 24 ชม. เรียบร้อย', inline: false }
-          ],
+          fields,
           footer: { text: 'Nexus SAMP Store • Automated Delivery System' },
           timestamp: new Date().toISOString()
         }]

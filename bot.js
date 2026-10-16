@@ -90,6 +90,147 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
   }
+
+  // ----------------------------------------------------
+  // 🎫 ระบบเปิดตั๋ว (Create Ticket)
+  // ----------------------------------------------------
+  if (interaction.customId === 'btn_create_ticket') {
+    try {
+      const guild = interaction.guild;
+      const member = interaction.member;
+
+      // ตรวจสอบว่ามีห้องตั๋วเปิดค้างไว้อยู่แล้วหรือไม่
+      const existingChannel = guild.channels.cache.find(ch => 
+        ch.name === `ticket-${member.user.username.toLowerCase().replace(/[^a-z0-9]/g, '')}` ||
+        (ch.topic && ch.topic === `ticket_owner_${member.id}`)
+      );
+
+      if (existingChannel) {
+        return await interaction.reply({
+          content: `⚠️ คุณมีห้องตั๋วที่เปิดค้างไว้อยู่แล้วครับ: <#${existingChannel.id}> กรุณาใช้ห้องเดิมก่อนเปิดใหม่ครับ`,
+          ephemeral: true
+        });
+      }
+
+      // ค้นหายศ Admin เพื่อให้สิทธิ์เห็นห้องตั๋ว
+      const adminRole = guild.roles.cache.find(r => 
+        r.name.includes('ผู้ดูแลระบบ') || r.name.toLowerCase().includes('admin') || r.name.toLowerCase().includes('owner')
+      );
+
+      // ค้นหาหมวดหมู่ "ซัพพอร์ตและพูดคุย" หรือหมวดหมู่ตั๋ว
+      let category = guild.channels.cache.find(c => 
+        c.type === ChannelType.GuildCategory && (c.name.includes('ซัพพอร์ต') || c.name.includes('COMMUNITY') || c.name.includes('TICKET'))
+      );
+
+      // สร้างห้องข้อความส่วนตัวเฉพาะสมาชิกและแอดมิน
+      const cleanUsername = member.user.username.toLowerCase().replace(/[^a-z0-9]/g, '') || 'member';
+      const ticketChannel = await guild.channels.create({
+        name: `ticket-${cleanUsername}`,
+        type: ChannelType.GuildText,
+        parent: category ? category.id : null,
+        topic: `ticket_owner_${member.id}`,
+        permissionOverwrites: [
+          {
+            id: guild.roles.everyone.id,
+            deny: [PermissionsBitField.Flags.ViewChannel]
+          },
+          {
+            id: member.id,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.AttachFiles,
+              PermissionsBitField.Flags.ReadMessageHistory,
+              PermissionsBitField.Flags.EmbedLinks
+            ]
+          },
+          ...(adminRole ? [{
+            id: adminRole.id,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.AttachFiles,
+              PermissionsBitField.Flags.ReadMessageHistory,
+              PermissionsBitField.Flags.ManageChannels
+            ]
+          }] : []),
+          {
+            id: client.user.id,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.ManageChannels
+            ]
+          }
+        ]
+      });
+
+      // ส่งข้อความต้อนรับและปุ่มปิดตั๋วในห้องใหม่
+      const welcomeEmbed = new EmbedBuilder()
+        .setColor(0x06b6d4)
+        .setTitle(`🎫 ยินดีต้อนรับสู่ห้องตั๋วช่วยเหลือ | Ticket`)
+        .setDescription(`สวัสดีครับ <@${member.id}> ยินดีต้อนรับสู่ห้องตั๋วติดต่อทีมงาน **Nexus SAMP Store**!\n\n📌 **กรุณาพิมพ์รายละเอียดทิ้งไว้ได้เลยครับ:**\n• ปัญหาการใช้งาน หรือระบบที่พบปัญหา\n• ปัญหาการเติมเงิน / ชำระเงิน (แนบรูปสลิป)\n• สั่งทำหรือสอบถามเกี่ยวกับสคริปต์ส่วนตัว\n\nทีมงาน ${adminRole ? `<@&${adminRole.id}>` : 'แอดมิน'} จะรีบเข้ามาตอบกลับและดูแลให้โดยเร็วที่สุดครับ!`)
+        .setFooter({ text: 'Nexus Support System • กดปุ่มด้านล่างเพื่อปิดตั๋วเมื่อเสร็จสิ้น' })
+        .setTimestamp();
+
+      const closeRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('btn_close_ticket')
+          .setLabel('🔒 ปิดห้องตั๋ว (Close Ticket)')
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      await ticketChannel.send({
+        content: `👋 สวัสดีครับ <@${member.id}> ${adminRole ? `<@&${adminRole.id}>` : ''}`,
+        embeds: [welcomeEmbed],
+        components: [closeRow]
+      });
+
+      await interaction.reply({
+        content: `✅ เปิดห้องตั๋วเรียบร้อยแล้วครับ: <#${ticketChannel.id}> (คลิกเข้าไปพูดคุยได้เลย)`,
+        ephemeral: true
+      });
+
+      console.log(`[Discord Bot] 🎫 สร้างห้องตั๋ว ${ticketChannel.name} ให้กับ ${member.user.tag}`);
+
+    } catch (err) {
+      console.error('[Discord Bot] Error creating ticket:', err);
+      if (!interaction.replied) {
+        await interaction.reply({
+          content: '⚠️ เกิดข้อผิดพลาดในการเปิดห้องตั๋ว: ' + err.message,
+          ephemeral: true
+        }).catch(() => {});
+      }
+    }
+  }
+
+  // ----------------------------------------------------
+  // 🔒 ระบบปิดตั๋ว (Close Ticket)
+  // ----------------------------------------------------
+  if (interaction.customId === 'btn_close_ticket') {
+    try {
+      const channel = interaction.channel;
+      if (!channel.name.startsWith('ticket-')) {
+        return await interaction.reply({
+          content: '⚠️ ปุ่มนี้ใช้งานได้เฉพาะในห้องตั๋วเท่านั้นครับ',
+          ephemeral: true
+        });
+      }
+
+      await interaction.reply({
+        content: `🔒 **ห้องตั๋วนี้กำลังจะถูกปิดและลบภายใน 5 วินาที...**\nขอบคุณที่ใช้บริการ **Nexus SAMP Store** ครับ!`
+      });
+
+      console.log(`[Discord Bot] 🔒 ปิดห้องตั๋ว ${channel.name} โดย ${interaction.user.tag}`);
+
+      setTimeout(async () => {
+        await channel.delete().catch(e => console.warn('Could not delete ticket channel:', e.message));
+      }, 5000);
+
+    } catch (err) {
+      console.error('[Discord Bot] Error closing ticket:', err);
+    }
+  }
 });
 
 // ----------------------------------------------------

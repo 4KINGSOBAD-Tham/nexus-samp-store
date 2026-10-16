@@ -13,18 +13,18 @@
   --bg-surface-hover: #1c2132;
   --bg-input: #0f111a;
 
-  /* Brand Accents */
-  --accent-primary: #4f46e5;
-  --accent-primary-hover: #4338ca;
-  --accent-cyan: #06b6d4;
+  /* Brand Accents (Fiery Esports Theme matching logo) */
+  --accent-primary: #ff4500;
+  --accent-primary-hover: #e03e00;
+  --accent-cyan: #ff7700;
   --accent-emerald: #10b981;
-  --accent-rose: #f43f5e;
+  --accent-rose: #ef4444;
   --accent-amber: #f59e0b;
 
   /* Borders & Dividers */
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-medium: rgba(255, 255, 255, 0.12);
-  --border-active: rgba(99, 102, 241, 0.4);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.14);
+  --border-active: rgba(255, 69, 0, 0.45);
 
   /* Typography */
   --text-main: #f1f5f9;
@@ -149,17 +149,20 @@ a {
   letter-spacing: -0.3px;
 }
 .brand-logo-img {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-md);
   object-fit: cover;
-  border: 1px solid var(--border-medium);
+  border: 1px solid rgba(255, 69, 0, 0.4);
+  box-shadow: 0 0 12px rgba(255, 69, 0, 0.3);
 }
 .brand-name {
   color: #fff;
 }
 .brand-name span {
-  color: var(--accent-cyan);
+  background: linear-gradient(135deg, #ff4500, #ffaa00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* Nav Links */
@@ -337,16 +340,17 @@ a {
 .hero-clean {
   padding: 3rem 0 2rem;
   border-bottom: 1px solid var(--border-subtle);
-  background: radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.08) 0%, transparent 60%);
+  background: radial-gradient(circle at 60% 0%, rgba(255, 69, 0, 0.12) 0%, transparent 65%);
 }
 .hero-clean-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
+  gap: 2.5rem;
 }
 .hero-text {
-  max-width: 650px;
+  flex: 1;
+  max-width: 600px;
 }
 .hero-chip {
   display: inline-flex;
@@ -354,15 +358,15 @@ a {
   gap: 0.45rem;
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--accent-cyan);
-  background: rgba(6, 182, 212, 0.1);
-  border: 1px solid rgba(6, 182, 212, 0.25);
+  color: #ff7700;
+  background: rgba(255, 119, 0, 0.1);
+  border: 1px solid rgba(255, 119, 0, 0.3);
   padding: 0.25rem 0.65rem;
   border-radius: var(--radius-sm);
   margin-bottom: 0.85rem;
 }
 .hero-title {
-  font-size: 2.2rem;
+  font-size: 2.3rem;
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.5px;
@@ -370,7 +374,28 @@ a {
   margin-bottom: 0.75rem;
 }
 .hero-title span {
-  color: var(--accent-cyan);
+  background: linear-gradient(135deg, #ff4500, #ffaa00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.hero-media-wrap {
+  flex: 1;
+  max-width: 500px;
+  display: flex;
+  justify-content: flex-end;
+}
+.hero-banner-card {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 69, 0, 0.4);
+  box-shadow: 0 12px 36px -8px rgba(255, 69, 0, 0.35), 0 0 24px rgba(239, 68, 68, 0.2);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+  display: block;
+}
+.hero-banner-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 16px 44px -6px rgba(255, 69, 0, 0.5), 0 0 36px rgba(255, 119, 0, 0.3);
 }
 .hero-desc {
   font-size: 1rem;

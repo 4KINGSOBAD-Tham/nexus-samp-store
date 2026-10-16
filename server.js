@@ -108,6 +108,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'samp-rank1-secret-key-2026';
 
+// Trust reverse proxies (Render, Cloudflare, Heroku, Nginx) for accurate client IP
+app.set('trust proxy', 1);
+
 // ----------------------------------------------------
 // 🛡️ NEXUS FULL-SPECTRUM SECURITY ENGINE (ระดับเต็มกราฟ)
 // ----------------------------------------------------
@@ -143,6 +146,7 @@ const generalLimiter = rateLimit({
   max: 150,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   handler: (req, res) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
     logSecurityThreat(ip, req.method, req.originalUrl, 'RATE_LIMIT_EXCEEDED', '150 req/min limit reached');
@@ -159,6 +163,7 @@ const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   handler: (req, res) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
     logSecurityThreat(ip, req.method, req.originalUrl, 'AUTH_BRUTE_FORCE', 'Multiple failed login/register attempts');
@@ -175,6 +180,7 @@ const slipLimiter = rateLimit({
   max: 8,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   handler: (req, res) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
     logSecurityThreat(ip, req.method, req.originalUrl, 'SLIP_SPAM_FLOOD', 'Excessive slip verification requests');

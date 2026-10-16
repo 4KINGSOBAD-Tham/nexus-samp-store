@@ -1,4 +1,8 @@
 require('dotenv').config();
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+  try { dns.setDefaultResultOrder('ipv4first'); } catch(e) {}
+}
 const { 
   Client, 
   GatewayIntentBits, 
@@ -48,6 +52,16 @@ const onReady = async () => {
 
 client.once('ready', onReady);
 client.once('clientReady', onReady);
+
+client.on('error', (err) => {
+  botDiagnostics.error = 'client_error: ' + err.message;
+  console.error('[Discord Bot Client Error]', err);
+});
+
+client.on('shardError', (err, shardId) => {
+  botDiagnostics.error = `shard_${shardId}_error: ` + err.message;
+  console.error(`[Discord Bot Shard ${shardId} Error]`, err);
+});
 
 // ----------------------------------------------------
 // Event: Button Click (Interaction) - ระบบกดรับยศปลดล็อกห้อง

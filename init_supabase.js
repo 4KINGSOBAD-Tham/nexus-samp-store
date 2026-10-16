@@ -123,7 +123,7 @@ async function initSupabase() {
     bank_name: 'ธนาคารไทยพาณิชย์ (SCB)',
     bank_account: '5632881610',
     bank_account_name: 'ธาม สุวรรณรัตน์',
-    discord_link: 'https://discord.gg/samp-thailand',
+    discord_link: 'https://discord.gg/NzcJ5CT4ru',
     slipok_branch_id: '78673',
     slipok_api_key: 'SLIPOKK5AUD56'
   };

@@ -1195,8 +1195,8 @@ app.post('/api/seller/withdraw', authenticateToken, async (req, res) => {
     }).catch(e => console.warn('Discord withdrawal notify error:', e.message));
 
     const mainWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_main']);
-    const creatorWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_creator']);
-    const webhookToUse = (creatorWebhook && creatorWebhook.value) || (mainWebhook && mainWebhook.value) || '';
+    const withdrawWebhook = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_webhook_withdraw']);
+    const webhookToUse = (withdrawWebhook && withdrawWebhook.value) || (mainWebhook && mainWebhook.value) || '';
 
     res.json({
       success: true,

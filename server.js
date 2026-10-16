@@ -328,7 +328,8 @@ app.get('/api/health', (req, res) => {
     bot: {
       isReady,
       tag,
-      status: isReady ? 'ONLINE' : 'OFFLINE'
+      status: isReady ? 'ONLINE' : 'OFFLINE',
+      diagnostics: botModule ? botModule.botDiagnostics : null
     },
     database: db.isPostgres ? 'Supabase PostgreSQL' : 'SQLite Local',
     uptime: Math.round(process.uptime()) + 's'

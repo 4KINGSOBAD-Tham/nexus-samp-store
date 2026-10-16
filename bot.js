@@ -23,7 +23,17 @@ const client = new Client({
 // ----------------------------------------------------
 // Event: Client Ready
 // ----------------------------------------------------
+let botDiagnostics = {
+  tokenSource: 'none',
+  tokenPrefix: null,
+  loginAttempted: false,
+  loginSuccess: false,
+  readyEventFired: false,
+  error: null
+};
+
 const onReady = async () => {
+  botDiagnostics.readyEventFired = true;
   console.log(`🤖 [Discord Bot] Nexus Store Bot ออนไลน์แล้ว! (${client.user.tag})`);
   
   // Set Rich Status
@@ -334,25 +344,35 @@ client.on('guildMemberRemove', async (member) => {
 async function startBot() {
   try {
     let token = process.env.DISCORD_BOT_TOKEN;
-    if (!token) {
+    if (token) {
+      botDiagnostics.tokenSource = 'env';
+    } else {
       const saved = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_bot_token']);
       if (saved && saved.value) {
         token = saved.value.trim();
+        botDiagnostics.tokenSource = 'database';
       }
     }
 
     if (!token) {
+      botDiagnostics.error = 'No bot token found in env or database';
       console.log('ℹ️ [Discord Bot] ไม่พบ Bot Token ทั้งใน .env และฐานข้อมูล');
       return;
     }
 
+    botDiagnostics.tokenPrefix = token.substring(0, 10);
+    botDiagnostics.loginAttempted = true;
+
     console.log(`[Discord Bot] กำลังเชื่อมต่อ Discord Gateway... (Token prefix: ${token.substring(0, 10)}...)`);
     client.login(token).then(() => {
+      botDiagnostics.loginSuccess = true;
       console.log('[Discord Bot] client.login สำเร็จ กำลังรอ Event Ready...');
     }).catch(err => {
+      botDiagnostics.error = err.message;
       console.error('❌ [Discord Bot] เข้าสู่ระบบล้มเหลว:', err.message);
     });
   } catch (err) {
+    botDiagnostics.error = err.message;
     console.warn('⚠️ [Discord Bot] Error in startBot:', err.message);
   }
 }
@@ -361,5 +381,6 @@ startBot();
 
 module.exports = {
   client,
-  startBot
+  startBot,
+  botDiagnostics
 };

@@ -196,65 +196,9 @@ const slipLimiter = rateLimit({
   }
 });
 
-// 7. Nexus Shield Web Application Firewall (WAF)
+// 7. Nexus Shield Web Application Firewall (WAF) - ปิดการบล็อกตามที่ผู้ใช้ร้องขอ
 function nexusShieldWAF(req, res, next) {
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
-  const ua = req.headers['user-agent'] || '';
-  const url = req.originalUrl || req.url;
-
-  // Scanner Bot Blocker
-  const botScannerRegex = /(sqlmap|nikto|dirbuster|gobuster|wpscan|masscan|zgrab|acunetix|nessus|nmap|havij|arachni|openvas|hydra|medusa|shodan|censys)/i;
-  if (botScannerRegex.test(ua)) {
-    logSecurityThreat(ip, req.method, url, 'VULNERABILITY_SCANNER', `User-Agent: ${ua}`);
-    return res.status(403).json({
-      success: false,
-      message: '⛔ ACCESS DENIED: Scanner bot blocked by Nexus Shield WAF'
-    });
-  }
-
-  // Common Exploit Probe Paths Blocker
-  const probePaths = [
-    /\.env/i, /\.git/i, /\.svn/i, /\.aws/i, /\.docker/i,
-    /wp-admin/i, /wp-login/i, /xmlrpc\.php/i,
-    /phpmyadmin/i, /pma/i, /shell\.php/i, /eval-stdin\.php/i,
-    /\.ds_store/i, /actuator/i, /config\.json/i, /web\.config/i
-  ];
-  for (const pattern of probePaths) {
-    if (pattern.test(url)) {
-      logSecurityThreat(ip, req.method, url, 'PROBE_EXPLOIT_PATH', `Probe target: ${url}`);
-      return res.status(403).json({
-        success: false,
-        message: '⛔ ACCESS DENIED: Probe detected and blocked by Nexus Shield WAF'
-      });
-    }
-  }
-
-  // Path Traversal Blocker
-  const pathTraversalRegex = /(\.\.\/|\.\.\\|\.\.%2f|\.\.%5c|win\.ini|\/etc\/passwd|\/etc\/shadow)/i;
-  if (pathTraversalRegex.test(url)) {
-    logSecurityThreat(ip, req.method, url, 'PATH_TRAVERSAL', `Target URL: ${url}`);
-    return res.status(400).json({
-      success: false,
-      message: '⛔ ACCESS DENIED: Path traversal attempt detected'
-    });
-  }
-
-  // SQL Injection in Query Strings
-  const sqlInjectionPattern = /(\b(UNION(\s+ALL)?\s+SELECT|SELECT\s+.*\s+FROM|INSERT\s+INTO|DROP\s+TABLE|ALTER\s+TABLE|DELETE\s+FROM)\b|--|\/\*|\*\/)/i;
-  const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
-  if (queryString && sqlInjectionPattern.test(decodeURIComponent(queryString))) {
-    logSecurityThreat(ip, req.method, url, 'SQL_INJECTION_QUERY', `Query: ${queryString}`);
-    return res.status(400).json({
-      success: false,
-      message: '⛔ ACCESS DENIED: SQL injection pattern detected'
-    });
-  }
-
-  // Payload XSS Stripping
-  if (req.body && typeof req.body === 'object') {
-    sanitizePayload(req.body);
-  }
-
+  // อนุญาตให้ทุกทราฟฟิก (รวมทั้งลิงก์ที่มาจาก Facebook, Google, ฯลฯ) เข้าใช้งานได้ตามปกติ ไม่บล็อก false-positive
   next();
 }
 
@@ -1106,41 +1050,20 @@ app.post('/api/seller/products', authenticateToken, uploadCreatorProduct, async 
     }
 
     // ----------------------------------------------------
-    // 🛡️ SECURITY AUDIT & BACKDOOR SCANNER
+    // SCRIPT PACKAGE / CODE UPLOAD (SCANNER REMOVED PER USER REQUEST)
     // ----------------------------------------------------
-    let scanReport = null;
+    let scanReport = {
+      isClean: true,
+      riskLevel: 'clean',
+      summary: '🟢 อัปโหลดไฟล์เรียบร้อย (ปิดระบบสแกนไวรัส)'
+    };
     let finalFileUrl = file_url ? file_url.trim() : '';
 
     if (scriptPackage && scriptPackage.buffer) {
       const ext = path.extname(scriptPackage.originalname).toLowerCase();
-      if (ext === '.zip') {
-        scanReport = await scanner.scanZipArchiveBuffer(scriptPackage.buffer);
-      } else if (scanner.DANGEROUS_EXTENSIONS.includes(ext)) {
-        return res.status(400).json({
-          success: false,
-          message: `🚫 ปฏิเสธการอัปโหลด: ไม่อนุญาตให้ใช้ไฟล์ประเภท ${ext.toUpperCase()} เนื่องจากเป็นไฟล์สคริปต์สุ่มเสี่ยงความปลอดภัยสูง`
-        });
-      }
-
-      // If dangerous threats or backdoors found: BLOCK IMMEDIATELY
-      if (scanReport && !scanReport.isClean) {
-        const threatList = (scanReport.threatsFormatted && scanReport.threatsFormatted.length > 0)
-          ? scanReport.threatsFormatted
-          : [
-              ...(scanReport.blockedFiles || []),
-              ...(scanReport.backdoors || []).map(b => `📂 ตำแหน่งใน ZIP: "${b.file}" (บรรทัดที่ ${b.line}) -> ${b.threat}`)
-            ];
-
-        return res.status(400).json({
-          success: false,
-          message: scanReport.summary,
-          threats: threatList
-        });
-      }
-
-      // If no external URL provided, save zip to secure public/uploads
+      // If no external URL provided, save file to public/uploads
       if (!finalFileUrl) {
-        const safePkgName = 'pkg-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
+        const safePkgName = 'pkg-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + (ext || '.zip');
         try {
           const targetDiskPath = path.join(uploadsDir, safePkgName);
           fs.writeFileSync(targetDiskPath, scriptPackage.buffer);
@@ -1149,22 +1072,6 @@ app.post('/api/seller/products', authenticateToken, uploadCreatorProduct, async 
           console.warn('Could not save script package to disk:', e.message);
         }
       }
-    } else if (code_snippet) {
-      // Scan code snippet for backdoor patterns
-      const issues = scanner.scanPawnSourceCode(code_snippet, 'ช่องกรอกโค้ดสคริปต์ (Code Snippet)');
-      if (issues.length > 0) {
-        const threatDetails = issues.map(iss => `📂 ตำแหน่ง: ${iss.file} (บรรทัดที่ ${iss.line}) -> ${iss.threat}\n   [โค้ด: ${iss.snippet}]`);
-        return res.status(400).json({
-          success: false,
-          message: `🚫 ตรวจพบโค้ดที่มีความเสี่ยง Backdoor ในสคริปต์ (${issues.length} จุด)`,
-          threats: threatDetails
-        });
-      }
-      scanReport = {
-        isClean: true,
-        riskLevel: 'clean',
-        summary: '🟢 ผ่านการสแกนโค้ดสคริปต์ Pawn: ปลอดภัย ไร้ Backdoor'
-      };
     }
 
     let finalImage = '/assets/roleplay.jpg';
@@ -1779,7 +1686,7 @@ app.get('/api/admin/security/stats', authenticateToken, requireAdmin, async (req
         rateLimitCount,
         firewallStatus: 'ACTIVE_FULL_SHIELD',
         modules: [
-          { name: 'Nexus Shield WAF (Firewall)', status: 'ACTIVE', desc: 'ตรวจจับและบล็อก Bot, Scanner, SQLi, LFI อัตโนมัติ' },
+          { name: 'Nexus Shield WAF (Firewall)', status: 'DISABLED', desc: 'ปิดการบล็อก URL และ Query (อนุญาตให้ผู้ใช้เข้าถึงเว็บได้อย่างอิสระ)' },
           { name: 'Anti-DDoS & Rate Limiter', status: 'ACTIVE', desc: 'จำกัดปริมาณคำขอ 150 ครั้ง/นาที ต่อ 1 IP' },
           { name: 'Brute-Force Protection', status: 'ACTIVE', desc: 'จำกัดการสุ่มรหัสผ่านล็อกอินสูงสุด 10 ครั้ง/5 นาที' },
           { name: 'Slip Double-Spend Anti-Race Lock', status: 'ACTIVE', desc: 'บล็อกการส่งสลิปซ้ำซ้อนหรือยิงสลิปพร้อมกัน' },

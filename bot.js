@@ -23,7 +23,7 @@ const client = new Client({
 // ----------------------------------------------------
 // Event: Client Ready
 // ----------------------------------------------------
-client.once('ready', async () => {
+const onReady = async () => {
   console.log(`🤖 [Discord Bot] Nexus Store Bot ออนไลน์แล้ว! (${client.user.tag})`);
   
   // Set Rich Status
@@ -34,7 +34,10 @@ client.once('ready', async () => {
     }],
     status: 'online'
   });
-});
+};
+
+client.once('ready', onReady);
+client.once('clientReady', onReady);
 
 // ----------------------------------------------------
 // Event: Button Click (Interaction) - ระบบกดรับยศปลดล็อกห้อง
@@ -125,7 +128,10 @@ async function startBot() {
       return;
     }
 
-    client.login(token).catch(err => {
+    console.log(`[Discord Bot] กำลังเชื่อมต่อ Discord Gateway... (Token prefix: ${token.substring(0, 10)}...)`);
+    client.login(token).then(() => {
+      console.log('[Discord Bot] client.login สำเร็จ กำลังรอ Event Ready...');
+    }).catch(err => {
       console.error('❌ [Discord Bot] เข้าสู่ระบบล้มเหลว:', err.message);
     });
   } catch (err) {

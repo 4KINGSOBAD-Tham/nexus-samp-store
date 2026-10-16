@@ -13,13 +13,11 @@ const { generatePromptPayQR, generateBankQR } = require('./promptpay');
 const multer = require('multer');
 const discord = require('./discord');
 
-// Start Discord Bot if Bot Token is available
-if (process.env.DISCORD_BOT_TOKEN) {
-  try {
-    require('./bot');
-  } catch (botErr) {
-    console.warn('⚠️ [Discord Bot] Failed to initialize:', botErr.message);
-  }
+// Start Discord Bot Service (Auto-loads token from env or Supabase site_settings)
+try {
+  require('./bot');
+} catch (botErr) {
+  console.warn('⚠️ [Discord Bot] Failed to initialize:', botErr.message);
 }
 
 // Strict Image File Filter

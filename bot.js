@@ -12,12 +12,6 @@ const {
 } = require('discord.js');
 const { db } = require('./database');
 
-const botToken = process.env.DISCORD_BOT_TOKEN;
-
-if (!botToken) {
-  console.log('ℹ️ [Discord Bot] ไม่พบ DISCORD_BOT_TOKEN ใน .env (บอทต้อนรับจะยังไม่เริ่มทำงานจนกว่าจะใส่ Token)');
-}
-
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -30,181 +24,116 @@ const client = new Client({
 // Event: Client Ready
 // ----------------------------------------------------
 client.once('ready', async () => {
-  console.log(`🤖 [Discord Bot] เข้าสู่ระบบสำเร็จในชื่อ: ${client.user.tag}`);
+  console.log(`🤖 [Discord Bot] Nexus Store Bot ออนไลน์แล้ว! (${client.user.tag})`);
   
-  // Set rich presence status
+  // Set Rich Status
   client.user.setPresence({
     activities: [{ 
-      name: '🛒 GTA SA-MP Scripts | 24/7 Auto Store', 
+      name: '🛒 GTA SA-MP Scripts | 24/7 Store', 
       type: ActivityType.Watching 
     }],
     status: 'online'
   });
+});
 
-  // Ensure Welcome Channel exists on all connected guilds
-  for (const guild of client.guilds.cache.values()) {
+// ----------------------------------------------------
+// Event: Button Click (Interaction) - ระบบกดรับยศปลดล็อกห้อง
+// ----------------------------------------------------
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton()) return;
+
+  if (interaction.customId === 'btn_verify_member') {
     try {
-      await ensureWelcomeChannel(guild);
-    } catch (e) {
-      console.warn(`[Discord Bot] Failed to check welcome channel in guild ${guild.name}:`, e.message);
+      const guild = interaction.guild;
+      const member = interaction.member;
+
+      // ค้นหายศ "👤 สมาชิก (Member)"
+      const memberRole = guild.roles.cache.find(r => 
+        r.name.includes('สมาชิก') || r.name.toLowerCase().includes('member')
+      );
+
+      if (!memberRole) {
+        return await interaction.reply({
+          content: '⚠️ เกิดข้อผิดพลาด: ไม่พบยศ "สมาชิก" ในระบบ กรุณาติดต่อแอดมินครับ',
+          ephemeral: true
+        });
+      }
+
+      // เช็คว่ามียศอยู่แล้วหรือไม่
+      if (member.roles.cache.has(memberRole.id)) {
+        return await interaction.reply({
+          content: 'ℹ️ คุณมียศ **สมาชิก** และปลดล็อกห้องทั้งหมดเรียบร้อยแล้วครับ! เพลิดเพลินกับการเลือกซื้อสคริปต์ได้เลย 🎮',
+          ephemeral: true
+        });
+      }
+
+      // มอบยศสมาชิก
+      await member.roles.add(memberRole);
+      console.log(`[Discord Bot] ✅ มอบยศสมาชิกให้ ${member.user.tag} (ผ่านการกดยืนยันตัวตน)`);
+
+      // ตอบกลับแบบส่วนตัว (เห็นแค่คนที่กดคนเดียว)
+      await interaction.reply({
+        content: `🎉 **ยืนยันตัวตนสำเร็จ!**\nยินดีต้อนรับคุณ <@${member.id}> สู่ **Nexus SAMP Store** อย่างเป็นทางการ!\nคุณได้รับยศ \`${memberRole.name}\` และปลดล็อกห้องทั้งหมดในเซิร์ฟเวอร์เรียบร้อยแล้วครับ 🛒✨`,
+        ephemeral: true
+      });
+
+    } catch (err) {
+      console.error('[Discord Bot] Error handling verify button:', err);
+      if (!interaction.replied) {
+        await interaction.reply({
+          content: '⚠️ เกิดข้อผิดพลาดในการมอบยศ: ' + err.message,
+          ephemeral: true
+        }).catch(() => {});
+      }
     }
   }
 });
 
-/**
- * Ensure channel #👋┃ยินดีต้อนรับ exists in the guild
- */
-async function ensureWelcomeChannel(guild) {
-  let welcomeChannel = guild.channels.cache.find(c => 
-    c.name.includes('ยินดีต้อนรับ') || c.name.toLowerCase().includes('welcome')
-  );
-
-  if (!welcomeChannel) {
-    // Try to find the INFO category
-    const infoCat = guild.channels.cache.find(c => 
-      c.type === ChannelType.GuildCategory && (c.name.includes('INFO') || c.name.includes('ข้อมูลร้านค้า'))
-    );
-
-    try {
-      welcomeChannel = await guild.channels.create({
-        name: '👋┃ยินดีต้อนรับ',
-        type: ChannelType.GuildText,
-        parent: infoCat ? infoCat.id : null,
-        position: 0,
-        topic: 'ห้องต้อนรับสมาชิกใหม่เข้าสู่ Nexus SAMP Store'
-      });
-      console.log(`[Discord Bot] สร้างห้องต้อนรับใหม่: #${welcomeChannel.name} ในเซิร์ฟเวอร์ "${guild.name}" สำเร็จ!`);
-    } catch (err) {
-      console.warn('[Discord Bot] ไม่สามารถสร้างห้องต้อนรับอัตโนมัติได้:', err.message);
-    }
-  }
-
-  return welcomeChannel;
-}
-
 // ----------------------------------------------------
-// Event: Guild Member Add (New member joined)
+// Event: Guild Member Add (คนเข้าเซิร์ฟเวอร์ใหม่)
 // ----------------------------------------------------
 client.on('guildMemberAdd', async (member) => {
-  console.log(`👋 [Discord Bot] มีสมาชิกใหม่เข้าร่วม: ${member.user.tag} (ID: ${member.id})`);
+  console.log(`👋 [Discord Bot] มีสมาชิกใหม่เข้าเซิร์ฟเวอร์: ${member.user.tag} (ID: ${member.id})`);
 
-  const guild = member.guild;
-
-  // 1. 👑 Auto-Role: Assign "👤 สมาชิก (Member)" role
-  try {
-    const memberRole = guild.roles.cache.find(r => 
-      r.name.includes('สมาชิก') || r.name.toLowerCase().includes('member')
-    );
-    if (memberRole) {
-      await member.roles.add(memberRole);
-      console.log(`  ✅ มอบยศ "${memberRole.name}" ให้ ${member.user.tag} สำเร็จ!`);
-    } else {
-      console.log('  ⚠️ ไม่พบยศ "👤 สมาชิก (Member)" ในเซิร์ฟเวอร์');
-    }
-  } catch (roleErr) {
-    console.warn(`  ⚠️ มอบยศอัตโนมัติไม่สำเร็จ (อาจเกิดจากลำดับยศของบอทอยู่ต่ำกว่า):`, roleErr.message);
-  }
-
-  // 2. 🎯 Find Target Channel for Welcome Message
-  let welcomeChannel = guild.channels.cache.find(c => 
-    c.name.includes('ยินดีต้อนรับ') || c.name.toLowerCase().includes('welcome')
-  );
-
-  if (!welcomeChannel) {
-    // Fallback to General chat channel
-    welcomeChannel = guild.channels.cache.find(c => 
-      c.name.includes('พูดคุยทั่วไป') || c.name.toLowerCase().includes('general')
-    ) || guild.systemChannel;
-  }
-
-  // 3. 🎨 Build Welcome Embed
-  const storeUrl = 'https://nexus-samp-store-6f88.onrender.com';
-  const memberAvatar = member.user.displayAvatarURL({ dynamic: true, size: 256 });
-  const rulesChannel = guild.channels.cache.find(c => c.name.includes('กฎระเบียบ'));
-  const chatChannel = guild.channels.cache.find(c => c.name.includes('พูดคุยทั่วไป'));
-
-  const welcomeEmbed = new EmbedBuilder()
-    .setColor(0x06b6d4) // Cyan Neon
-    .setTitle(`🎉 ยินดีต้อนรับสู่ ${guild.name}!`)
-    .setDescription(`สวัสดีคุณ <@${member.id}> เข้าสู่คอมมูนิตี้ร้านค้าสคริปต์อย่างเป็นทางการ!\nเราพร้อมส่งมอบระบบ GTA SA-MP คุณภาพสูง จัดส่งอัตโนมัติ 24 ชั่วโมง`)
-    .setThumbnail(memberAvatar)
-    .addFields(
-      { name: '👤 ชื่อผู้ใช้', value: `\`${member.user.tag}\``, inline: true },
-      { name: '🔢 สมาชิกลำดับที่', value: `**#${guild.memberCount}**`, inline: true },
-      { name: '👑 ยศที่ได้รับ', value: `\`👤 สมาชิก (Member)\``, inline: true },
-      { 
-        name: '📜 แนะนำเบื้องต้น', 
-        value: `• อ่านข้อตกลงและนโยบายที่ ${rulesChannel ? `<#${rulesChannel.id}>` : 'ห้องกฎระเบียบ'}\n• แลกเปลี่ยนความรู้หรือพูดคุยที่ ${chatChannel ? `<#${chatChannel.id}>` : 'ห้องพูดคุยทั่วไป'}\n• เลือกดูระบบสคริปต์ทั้งหมดได้ทางหน้าเว็บร้านค้า`, 
-        inline: false 
-      }
-    )
-    .setImage('https://raw.githubusercontent.com/4KINGSOBAD-Tham/nexus-samp-store/main/public/assets/hero-banner.jpg')
-    .setFooter({ 
-      text: `${guild.name} • ยินดีต้อนรับสมาชิกทุกท่าน`, 
-      iconURL: guild.iconURL({ dynamic: true }) || undefined 
-    })
-    .setTimestamp();
-
-  // Action Buttons
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setLabel('🌐 เข้าสู่หน้าร้านค้า')
-      .setStyle(ButtonStyle.Link)
-      .setURL(storeUrl),
-    new ButtonBuilder()
-      .setLabel('💬 พูดคุยในเซิร์ฟเวอร์')
-      .setStyle(ButtonStyle.Link)
-      .setURL(`https://discord.com/channels/${guild.id}/${chatChannel ? chatChannel.id : welcomeChannel?.id}`)
-  );
-
-  // Send to Channel
-  if (welcomeChannel) {
-    try {
-      await welcomeChannel.send({
-        content: `👋 ยินดีต้อนรับ <@${member.id}> เข้าสู่เซิร์ฟเวอร์ครับ!`,
-        embeds: [welcomeEmbed],
-        components: [row]
-      });
-      console.log(`  🎉 ส่งการ์ดต้อนรับเข้าห้อง #${welcomeChannel.name} เรียบร้อยแล้ว!`);
-    } catch (msgErr) {
-      console.warn(`  ⚠️ ไม่สามารถส่งข้อความเข้าห้อง #${welcomeChannel.name} ได้:`, msgErr.message);
-    }
-  }
-
-  // 4. 📩 Send Direct Message (DM) to User
+  // ส่ง DM แนะนำให้ไปกดยืนยันตัวตนที่ห้อง #ยืนยันตัวตน
   try {
     const dmEmbed = new EmbedBuilder()
-      .setColor(0x10b981) // Emerald Green
-      .setTitle(`🎮 ยินดีต้อนรับสู่ ${guild.name}!`)
-      .setDescription(`ขอบคุณที่เข้าร่วมเซิร์ฟเวอร์ดิสคอร์ดของเราครับ!\nหากคุณกำลังมองหาระบบเซิร์ฟเวอร์ SA-MP, Gamemode คุณภาพสูง หรือระบบป้องกันแอนตี้ชีท สามารถเข้าชมหน้าร้านค้าออนไลน์ได้ตลอด 24 ชม.`)
-      .addFields(
-        { name: '🌐 ลิงก์หน้าร้าน', value: storeUrl },
-        { name: '🎫 แจ้งปัญหา / สอบถาม', value: 'สามารถเปิดทิคเก็ตหรือแท็กติดต่อแอดมินในเซิร์ฟเวอร์ได้เลยครับ' }
-      )
-      .setFooter({ text: 'ขอให้สนุกกับการสร้างเซิร์ฟเวอร์ SA-MP!' });
+      .setColor(0x10b981)
+      .setTitle(`🎮 ยินดีต้อนรับสู่ ${member.guild.name}!`)
+      .setDescription(`สวัสดีคุณ **${member.user.username}** ขอบคุณที่เข้าร่วมเซิร์ฟเวอร์ดิสคอร์ดของเราครับ!\n\n📌 **เริ่มต้นใช้งาน:**\nกรุณาไปที่ห้อง **\`#✅┃ยืนยันตัวตน\`** แล้วกดปุ่มสีเขียว **"ยืนยันตัวตน"** เพื่อรับยศสมาชิกและปลดล็อกห้องทั้งหมดในร้านค้านะครับ 🎉\n\n🌐 เว็บไซต์ร้านค้า: https://nexus-samp-store-6f88.onrender.com`)
+      .setFooter({ text: 'Nexus SAMP Store • 24/7 Automated Delivery' });
 
     await member.send({ embeds: [dmEmbed] });
-    console.log(`  📩 ส่งข้อความทักทาย DM ไปยัง ${member.user.tag} สำเร็จ!`);
-  } catch (dmErr) {
-    // Users often have DMs closed from server members, this is normal
-    console.log(`  ℹ️ ไม่สามารถส่ง DM หา ${member.user.tag} ได้ (ผู้ใช้อาจปิดรับข้อความส่วนตัว)`);
+  } catch (e) {
+    // ผู้ใช้ปิด DM เป็นเรื่องปกติ
   }
 });
 
 // Start Bot function
-function startBot() {
-  if (!botToken) {
-    return;
+async function startBot() {
+  try {
+    let token = process.env.DISCORD_BOT_TOKEN;
+    if (!token) {
+      const saved = await db.get('SELECT value FROM site_settings WHERE key = ?', ['discord_bot_token']);
+      if (saved && saved.value) {
+        token = saved.value.trim();
+      }
+    }
+
+    if (!token) {
+      console.log('ℹ️ [Discord Bot] ไม่พบ Bot Token ทั้งใน .env และฐานข้อมูล');
+      return;
+    }
+
+    client.login(token).catch(err => {
+      console.error('❌ [Discord Bot] เข้าสู่ระบบล้มเหลว:', err.message);
+    });
+  } catch (err) {
+    console.warn('⚠️ [Discord Bot] Error in startBot:', err.message);
   }
-  client.login(botToken).catch(err => {
-    console.error('❌ [Discord Bot] เข้าสู่ระบบล้มเหลว:', err.message);
-  });
 }
 
-// Auto start if token exists
-if (botToken) {
-  startBot();
-}
+startBot();
 
 module.exports = {
   client,

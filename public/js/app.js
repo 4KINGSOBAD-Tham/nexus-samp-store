@@ -938,6 +938,55 @@ async function adminDeleteProduct(id, name) {
   }
 }
 
+// Compress and optimize image on client-side before upload
+function optimizeImageFile(file, maxWidth = 1200, maxHeight = 1200, quality = 0.85) {
+  return new Promise((resolve) => {
+    if (!file || !file.type || !file.type.startsWith('image/')) {
+      return resolve(file);
+    }
+    // If small (< 300KB), keep as is
+    if (file.size < 300 * 1024) {
+      return resolve(file);
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png');
+        const outputMime = isPng ? 'image/png' : 'image/jpeg';
+        canvas.toBlob((blob) => {
+          if (blob && blob.size < file.size) {
+            resolve(new File([blob], file.name, { type: outputMime }));
+          } else {
+            resolve(file);
+          }
+        }, outputMime, quality);
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+
 // Open Add Product Modal
 function openAddProductModal() {
   const form = document.getElementById('formAddProduct');
@@ -976,7 +1025,7 @@ function setupAdminForm() {
     formAdd.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const file = prodFileInput ? prodFileInput.files[0] : null;
+      let file = prodFileInput ? prodFileInput.files[0] : null;
       if (!file) {
         showToast('กรุณาแนบรูปภาพหน้าปกของสคริปต์ก่อนบันทึก', 'error');
         return;
@@ -985,7 +1034,9 @@ function setupAdminForm() {
       const submitBtn = formAdd.querySelector('button[type="submit"]');
       const originalText = submitBtn.innerHTML;
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '⏳ กำลังอัปโหลดภาพและบันทึกข้อมูล...';
+      submitBtn.innerHTML = '⏳ กำลังประมวลผลรูปภาพและบันทึกข้อมูล...';
+
+      file = await optimizeImageFile(file);
 
       const formData = new FormData();
       formData.append('name', document.getElementById('adminProdName').value.trim());
@@ -994,7 +1045,7 @@ function setupAdminForm() {
       formData.append('file_url', document.getElementById('adminProdFileUrl').value.trim());
       formData.append('short_desc', document.getElementById('adminProdShortDesc').value.trim());
       formData.append('description', document.getElementById('adminProdDesc').value.trim());
-      formData.append('imageFile', file);
+      formData.append('imageFile', file, file.name);
 
       try {
         const res = await fetch('/api/admin/products', {
@@ -1198,6 +1249,26 @@ function setupCreatorMarketplace() {
     });
   }
 
+  // Creator Image Preview
+  const creatorFileInput = document.getElementById('creatorProdImageFile');
+  const creatorPreviewWrap = document.getElementById('creatorProdImagePreviewWrap');
+  const creatorPreview = document.getElementById('creatorProdImagePreview');
+  if (creatorFileInput && creatorPreviewWrap && creatorPreview) {
+    creatorFileInput.addEventListener('change', () => {
+      const file = creatorFileInput.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          creatorPreview.src = e.target.result;
+          creatorPreviewWrap.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      } else {
+        creatorPreviewWrap.style.display = 'none';
+      }
+    });
+  }
+
   // Handle Creator Product Submission
   const formSubmit = document.getElementById('formSubmitCreatorProduct');
   if (formSubmit) {
@@ -1210,6 +1281,18 @@ function setupCreatorMarketplace() {
         return;
       }
 
+      const submitBtn = formSubmit.querySelector('button[type="submit"]');
+      const originalText = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '⏳ กำลังประมวลผลรูปภาพและส่งข้อมูล...';
+      }
+
+      let fileToUpload = creatorFileInput && creatorFileInput.files[0] ? creatorFileInput.files[0] : null;
+      if (fileToUpload) {
+        fileToUpload = await optimizeImageFile(fileToUpload);
+      }
+
       const formData = new FormData();
       formData.append('name', document.getElementById('creatorProdName').value.trim());
       formData.append('category_slug', document.getElementById('creatorProdCategory').value);
@@ -1219,12 +1302,9 @@ function setupCreatorMarketplace() {
       formData.append('short_desc', document.getElementById('creatorProdShortDesc').value.trim());
       formData.append('description', document.getElementById('creatorProdDesc').value.trim());
 
-      const fileInput = document.getElementById('creatorProdImageFile');
-      if (fileInput && fileInput.files[0]) {
-        formData.append('imageFile', fileInput.files[0]);
+      if (fileToUpload) {
+        formData.append('imageFile', fileToUpload, fileToUpload.name);
       }
-
-      showToast('กำลังส่งข้อมูลและไฟล์สคริปต์เข้าสู่ระบบ...');
 
       try {
         const res = await fetch('/api/seller/products', {
@@ -1236,16 +1316,26 @@ function setupCreatorMarketplace() {
         });
         const data = await res.json();
 
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
+
         if (data.success) {
           showToast(data.message);
           formSubmit.reset();
+          if (creatorPreviewWrap) creatorPreviewWrap.style.display = 'none';
           switchCreatorTab('my-scripts');
           loadCreatorDashboard();
         } else {
           showToast(data.message, 'error');
         }
       } catch (err) {
-        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
+        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์: ' + err.message, 'error');
       }
     });
   }

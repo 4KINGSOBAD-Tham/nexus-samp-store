@@ -394,7 +394,11 @@
 
               <div class="form-group">
                 <label class="form-label">รูปภาพหน้าปกสคริปต์ (อัปโหลดรูป JPG/PNG)</label>
-                <input type="file" class="form-control" id="creatorProdImageFile" accept="image/jpeg,image/png,image/webp">
+                <input type="file" class="form-control" id="creatorProdImageFile" accept="image/*,image/png,image/jpeg,image/webp">
+                <div id="creatorProdImagePreviewWrap" style="display: none; margin-top: 0.75rem; text-align: center; background: var(--bg-input); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px dashed var(--border-medium);">
+                  <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.5rem;">ตัวอย่างภาพหน้าปกที่จะแสดงในหน้าร้าน:</div>
+                  <img id="creatorProdImagePreview" style="max-height: 180px; max-width: 100%; border-radius: 6px; border: 1px solid var(--border-medium); object-fit: contain;">
+                </div>
               </div>
 
               <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 1rem;">
@@ -846,7 +850,7 @@
   </div>
 
   <script src="/js/security.js?v=1.0"></script>
-  <script src="/js/app.js?v=2.7"></script>
+  <script src="/js/app.js?v=2.8"></script>
 </body>
 
 </html>

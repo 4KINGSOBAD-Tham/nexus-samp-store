@@ -13,9 +13,23 @@ const { generatePromptPayQR, generateBankQR } = require('./promptpay');
 const multer = require('multer');
 
 // Strict Image File Filter
-const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const allowedImageTypes = [
+  'image/jpeg', 'image/jpg', 'image/pjpeg',
+  'image/png', 'image/x-png',
+  'image/webp',
+  'image/gif',
+  'application/octet-stream'
+];
+const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+
 const imageFileFilter = (req, file, cb) => {
-  if (allowedImageTypes.includes(file.mimetype)) {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const mime = (file.mimetype || '').toLowerCase();
+
+  const isMimeOk = allowedImageTypes.includes(mime);
+  const isExtOk = allowedExtensions.includes(ext);
+
+  if (isMimeOk || isExtOk) {
     cb(null, true);
   } else {
     cb(new Error('ประเภทไฟล์ไม่ถูกต้อง! อนุญาตเฉพาะรูปภาพ (JPG, PNG, WEBP, GIF) เท่านั้น'));
@@ -28,25 +42,45 @@ const upload = multer({
   fileFilter: imageFileFilter
 });
 
-// Directory for product image attachments
+// Directory for product image attachments (cache)
 const uploadsDir = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-const prodStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const safeExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) ? ext : '.jpg';
-    cb(null, 'cover-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + safeExt);
-  }
-});
 const uploadProductCover = multer({
-  storage: prodStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: imageFileFilter
 });
+
+// Helper to convert uploaded product image into persistent Base64 and write to disk
+function getProductImageData(file, fallback = '/assets/roleplay.jpg') {
+  if (!file || !file.buffer) return fallback;
+
+  const ext = path.extname(file.originalname).toLowerCase();
+  const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext) ? ext : '.jpg';
+  const filename = 'cover-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + safeExt;
+
+  // Try writing to local disk cache
+  try {
+    fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
+  } catch (err) {
+    console.warn('⚠️ Could not write file to local disk:', err.message);
+  }
+
+  // Detect proper MIME
+  let mime = file.mimetype;
+  if (!mime || mime === 'application/octet-stream') {
+    if (safeExt === '.png') mime = 'image/png';
+    else if (safeExt === '.webp') mime = 'image/webp';
+    else if (safeExt === '.gif') mime = 'image/gif';
+    else mime = 'image/jpeg';
+  }
+
+  // Convert to Base64 data URI to guarantee 100% persistence in Cloud DB (never lost on Render restart)
+  return `data:${mime};base64,${file.buffer.toString('base64')}`;
+}
 
 // Initialize database
 initDatabase();
@@ -975,7 +1009,7 @@ app.post('/api/seller/products', authenticateToken, uploadProductCover.single('i
 
     let finalImage = '/assets/roleplay.jpg';
     if (req.file) {
-      finalImage = '/uploads/' + req.file.filename;
+      finalImage = getProductImageData(req.file);
     } else if (image) {
       finalImage = image;
     }
@@ -1264,7 +1298,7 @@ app.post('/api/admin/products', authenticateToken, requireAdmin, uploadProductCo
 
     let finalImage = '/assets/roleplay.jpg';
     if (req.file) {
-      finalImage = '/uploads/' + req.file.filename;
+      finalImage = getProductImageData(req.file);
     } else if (image) {
       finalImage = image;
     }
@@ -1318,7 +1352,7 @@ app.put('/api/admin/products/:id', authenticateToken, requireAdmin, uploadProduc
 
     let finalImage = existing.image;
     if (req.file) {
-      finalImage = '/uploads/' + req.file.filename;
+      finalImage = getProductImageData(req.file, existing.image);
     } else if (image) {
       finalImage = image;
     }
@@ -1464,6 +1498,14 @@ app.post('/api/admin/security/clear-logs', authenticateToken, requireAdmin, asyn
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+});
+
+// Handle Multer and API errors as JSON
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError || (err && err.message)) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+  next(err);
 });
 
 // SPA Fallback middleware for Express 5

@@ -45,7 +45,8 @@ client.on('ready', async () => {
         },
         {
           id: memberRole.id,
-          deny: [PermissionsBitField.Flags.ViewChannel] // ซ่อนห้องนี้เมื่อได้ยศสมาชิกแล้ว
+          allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory],
+          deny: [PermissionsBitField.Flags.SendMessages]
         }
       ]
     });
@@ -59,7 +60,8 @@ client.on('ready', async () => {
       },
       {
         id: memberRole.id,
-        deny: [PermissionsBitField.Flags.ViewChannel] // ซ่อนห้องนี้เมื่อได้ยศสมาชิกแล้ว
+        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory],
+        deny: [PermissionsBitField.Flags.SendMessages]
       }
     ]);
     console.log(`  ✅ อัปเดตสิทธิ์ห้อง: #${verifyChannel.name}`);

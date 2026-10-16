@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const { 
   Client, 
   GatewayIntentBits, 
@@ -7,7 +8,8 @@ const {
   EmbedBuilder, 
   ActionRowBuilder, 
   ButtonBuilder, 
-  ButtonStyle 
+  ButtonStyle,
+  AttachmentBuilder
 } = require('discord.js');
 
 const botToken = process.env.DISCORD_BOT_TOKEN;
@@ -92,10 +94,17 @@ client.on('ready', async () => {
     await verifyChannel.bulkDelete(messages).catch(() => {});
   }
 
+  const bannerPath = path.join(__dirname, 'public', 'assets', 'nexus-banner.jpg');
+  const logoPath = path.join(__dirname, 'public', 'assets', 'nexus-logo.jpg');
+  const bannerFile = new AttachmentBuilder(bannerPath, { name: 'banner.jpg' });
+  const logoFile = new AttachmentBuilder(logoPath, { name: 'logo.jpg' });
+
   const embed = new EmbedBuilder()
-    .setColor(0x10B981) // Emerald Green
+    .setColor(0xFF4500) // Fiery Orange Red (โทนสีตามโลโก้)
     .setTitle('🛡️ ยืนยันตัวตนเข้าสู่เซิร์ฟเวอร์ Nexus SAMP Store')
     .setDescription('ยินดีต้อนรับทุกท่านเข้าสู่คอมมูนิตี้และร้านค้าสคริปต์ **Nexus SAMP Store** อย่างเป็นทางการ!\n\nโปรดกดปุ่ม **"✅ ยืนยันตัวตน / รับยศปลดล็อกห้อง"** สีเขียวด้านล่างนี้ เพื่อรับยศสมาชิกและปลดล็อกการเข้าถึงห้องทั้งหมดในเซิร์ฟเวอร์ครับ 🎉')
+    .setThumbnail('attachment://logo.jpg')
+    .setImage('attachment://banner.jpg')
     .addFields(
       { 
         name: '📜 กฎระเบียบเบื้องต้น', 
@@ -108,7 +117,6 @@ client.on('ready', async () => {
         inline: false 
       }
     )
-    .setImage('https://raw.githubusercontent.com/4KINGSOBAD-Tham/nexus-samp-store/main/public/assets/hero-banner.jpg')
     .setFooter({ text: 'Nexus SAMP Store • Automated Verification System' })
     .setTimestamp();
 
@@ -125,6 +133,7 @@ client.on('ready', async () => {
 
   await verifyChannel.send({
     embeds: [embed],
+    files: [bannerFile, logoFile],
     components: [buttonRow]
   });
 

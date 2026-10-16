@@ -1,0 +1,32 @@
+นี่คือ รวมลิงก์ทั้งหมดที่เกี่ยวข้องกับระบบร้านค้าของคุณ สามารถบันทึกหน้านี้เก็บไว้ได้เลยครับ 📌
+
+1. 🗄️ ฐานข้อมูลคลาวด์ (Supabase Cloud Database)
+หน้า Dashboard โครงการ:
+👉 https://supabase.com/dashboard/project/tprndjdrwejsaphcllct
+หน้าจัดการตารางข้อมูลโดยตรง (Table Editor):
+👉 https://supabase.com/dashboard/project/tprndjdrwejsaphcllct/editor (ใช้ดูรายชื่อลูกค้า, ตรวจสลิป, ดู License Key, ปรับพ้อย)
+2. 🌐 โฮสติ้งเซิร์ฟเวอร์เปิดเว็บ 24 ชม. (Render)
+หน้า Render Dashboard:
+👉 https://dashboard.render.com
+หน้าเว็บร้านค้าของคุณบน Render (เมื่อ Deploy เสร็จ):
+👉 https://nexus-samp-store.onrender.com (หรือชื่อที่คุณตั้งไว้)
+3. 📦 คลังโค้ดต้นฉบับ (GitHub Repository)
+ลิงก์ GitHub ของคุณ:
+👉 https://github.com/4KINGSOBAD-Tham/nexus-samp-store (โค้ดทั้งหมดอยู่ที่นี่ เมื่อคุณหรือระบบอัปเดตโค้ด Render จะดึงไปขึ้นเว็บให้อัตโนมัติ)
+4. 🚀 ลิงก์ออนไลน์ชั่วคราว (Cloudflare Tunnel จากเครื่องคุณ)
+เข้าชมเว็บสดตอนนี้ได้ทันที:
+👉 https://zones-voters-smithsonian-possess.trycloudflare.com (สามารถเปิดจากมือถือหรือส่งให้เพื่อนทดสอบได้เลยครับ)
+5. 📱 ระบบตรวจสลิปอัตโนมัติ (SlipOK)
+เว็บไซต์ SlipOK:
+👉 https://slipok.com
+Branch ID ในระบบคุณ: 78673
+API Key: SLIPOKK5AUD56
+
+https://nexus-samp-store-6f88.onrender.com
+
+6. 🤖 ระบบแจ้งเตือน Discord อัตโนมัติ (Discord Webhook Integration)
+- โค้ดระบบสร้างเสร็จแล้ว รองรับแจ้งเตือน: ออเดอร์ซื้อ, สลิปเติมเงิน, สคริปต์ใหม่, ขอถอนเงิน, และ Nexus Shield WAF
+- วิธีเชื่อมต่อ:
+  1. สร้างห้องใน Discord (เช่น #🔔┃แจ้งเตือนร้านค้า)
+  2. ไปที่ Edit Channel -> Integrations -> Webhooks -> สร้าง Webhook แล้วกด "Copy Webhook URL"
+  3. ไปที่หน้า Admin ของเว็บ -> กล่อง "เชื่อมต่อระบบแจ้งเตือนเข้า Discord" -> วาง Webhook URL -> กดทดสอบและบันทึก

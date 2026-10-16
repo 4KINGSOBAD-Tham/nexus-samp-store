@@ -53,6 +53,26 @@ async function sendToDiscord(webhookUrl, payload) {
 
     if (response.status === 204 || response.ok) {
       return { success: true };
+    } else if (response.status === 429) {
+      // Auto retry if rate limited
+      try {
+        const rateLimitData = await response.json();
+        const retryAfterMs = Math.min(Math.ceil((rateLimitData.retry_after || 2) * 1000), 5000);
+        console.warn(`⏳ Discord rate limit hit, auto-retrying in ${retryAfterMs}ms...`);
+        await new Promise(r => setTimeout(r, retryAfterMs + 500));
+
+        const retryRes = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (retryRes.status === 204 || retryRes.ok) {
+          return { success: true };
+        }
+      } catch (e) {
+        // continue to error return
+      }
+      return { success: false, message: 'Discord ติด Rate Limit ชั่วคราว (กรุณารอประมาณ 5-10 วินาทีแล้วกดยิงทดสอบอีกครั้ง)' };
     } else {
       const errText = await response.text();
       console.warn('⚠️ Discord Webhook response error:', response.status, errText);
